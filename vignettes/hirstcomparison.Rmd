@@ -5,17 +5,105 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(lubridate)
+
 ```
 
 # Load Data
 
 ```{r}
 
-path <- "/proj/pay/buw/tapomo/data4simon"
+# The data was provided by Fiona Tummon, in form of 10-minute pollen counts.
+# The data prep until that point was not re-evaluated.
+# The datetimes were provided in a seperate file (tbd whether those are UTC or not)
+# PAY2, PAY4 and PAY8 are three different pollen traps
+# lines 2,4,6,7 are four different lines, along which the pollen were manually counted under the microsope.
+# Lines 2 and 6 were counted in 2013, whereas lines 4 and 7 were counted in 2019
 
-list.files(path)
+path_data <- paste0(here::here(), "/ext-data/")
+files_data <- list.files(path_data, pattern = "2013_10min.csv")
+files_datetimes <- list.files(path_data, pattern = "dates_10min.csv")
+
+data_raw <-
+  map(files_data, ~ read_delim(
+    paste0(path_data, .x),
+    delim = ";",
+    col_names = TRUE,
+    col_types = cols(.default = "n"),
+    na = "nan"
+    )
+  ) %>% 
+  setNames(files_data)
+
+dates_raw <-
+  map(files_datetimes,~ read_delim(
+    paste0(path_data, .x),
+    delim = ";",
+    col_names = FALSE,
+    col_types = cols(.default = "n") # dates and times are in a weird format, have to import as numeric as a consequence
+    )
+  ) %>% 
+  setNames(files_datetimes)
+
+dates <- map(dates_raw, ~mutate(
+  .x,
+  time = sprintf("%04d", as.integer(X2)), # otherwise we lose leading zeros
+  datetime = ymd_hm(paste0(X1, time)))%>% 
+    select(datetime)
+  )
+
+# Combining the measurements with the datetimes for the three traps
+# It appears that the traps have slightly different timestamps
+data <- map2(data_raw, rep(1:3, each = 4), ~bind_cols(.x, dates[[.y]]) %>% mutate(trap = 2^(.y)))
+
+# Create a new variable to differentiate between counted lines; note that traps were already defined in the previous map-call above
+data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = .y))
+
+# We are only interested on a subset of the data
+# The order of variables is different in the PAY2 and PAY6 data, those are the old counts from 2013
+
+data = map(data, ~select(.x, 
+    kacastz0, kaalnuz0, kaulmuz0, kacuprz0, kafraxz0, kafaguz0, kajuglz0, khplanz0, kacoryz0, 
+    kapinuz0, kaquerz0, khrumez0, kaplatz0, kapopuz0, khpoacz0, kasaliz0, kabetuz0, kacarpz0, 
+    khurtiz0, kataxuz0, kapicez0, datetime) %>% 
+  setNames(c(
+    "Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
+    "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
+    "Urticacées", "Taxus", "Picea", "datetime")))
+
+# map(dates, ~summary(.x))
+# map(data_raw, ~summary(.x))
 
 ```
+
+There are a few missing measurements, we will impute/exclude those in the next step.
+
+```{r}
+
+```
+
+Now let's plot some time series to get a better overview of the data.
+For better visibility I am displaying hourly sums as a minimum timespan.
+
+```{r}
+
+data[[1]] %>% 
+  ggplot(aes(x = datetime)) +
+  geom_point(aes(y = Alnus))
+
+
+```
+
+
+
+
+
+
+
+
+
 
 
 
