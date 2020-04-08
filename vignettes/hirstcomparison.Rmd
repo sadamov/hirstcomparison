@@ -63,7 +63,7 @@ data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = .y))
 
 # We are only interested on a subset of the data
 # The rder of variables is different in the PAY2 and PAY6 data, those are the old counts from 2013
-species <- c("Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
+species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
     "Urticacées", "Taxus", "Picea")
 
@@ -71,16 +71,24 @@ data = map(data, ~select(.x,
     kacastz0, kaalnuz0, kaulmuz0, kacuprz0, kafraxz0, kafaguz0, kajuglz0, khplanz0, kacoryz0, 
     kapinuz0, kaquerz0, khrumez0, kaplatz0, kapopuz0, khpoacz0, kasaliz0, kabetuz0, kacarpz0, 
     khurtiz0, kataxuz0, kapicez0, datetime, trap, line) %>% 
-  setNames(c(species, "datetime", "trap", "line")))
+  setNames(c(species_selection, "datetime", "trap", "line")))
 
 # map(dates, ~summary(.x))
 # map(data_raw, ~summary(.x))
 
+
 ```
 
 There are a few missing measurements, we will impute/exclude those in the next step.
+Generally, there if one species is NA at a certain time, then all species are NA.
+Hence we could assume that the traps had a malfunction during that time.
+What is surprising though is the fact that not all lines have the same amount of NAs.
+This might suggest that some entries were omitted during the manual pollen counting exercise.
+If these values are outside of the blooming season then we don't have an issue, I will check this below.
 
 ```{r}
+
+map(data, ~.x %>% filter(is.na(Populus)) %>% nrow)
 
 ```
 
@@ -97,11 +105,18 @@ For better visibility I am displaying hourly sums as a minimum timespan.
 
 ```{r}
 
+species <- "Ulmus"
+
 data[[1]] %>% 
   ggplot(aes(x = datetime)) +
-  geom_point(aes(y = Alnus))
+  geom_point(aes_string(y = species))
 
-data[[1]] %>% summary
+data[[1]] %>% 
+  # filter(!!sym(species) != 0) %>% 
+  ggplot() +
+  geom_boxplot(aes_string(y = species))
+
+data[[1]] %>% select(Poaceae) %>% unique
 
 ```
 
