@@ -96,7 +96,7 @@ The team in Payerne fuond that the air sucking rates of the Hirst traps are actu
 The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollencounts per 10minutes are too high and should be reduced by a factor of 1.35.
 
 ```{r}
-data <- map(data, ~mutate_at(.x, vars(species), ~./1.35))
+data <- map(data, ~mutate_at(.x, vars(species_selection), ~./1.35))
 ```
 
 
@@ -105,18 +105,23 @@ For better visibility I am displaying hourly sums as a minimum timespan.
 
 ```{r}
 
-species <- "Ulmus"
+species <- "Poaceae"
 
 data[[1]] %>% 
+  filter(!!sym(species) != 0) %>%
   ggplot(aes(x = datetime)) +
-  geom_point(aes_string(y = species))
+  geom_point(aes(y = !!sym(species)))
+
+bins <- data[[1]] %>% select(Poaceae) %>%  filter(!is.na(Poaceae), Poaceae != 0)%>% unique %>% pull %>% length
 
 data[[1]] %>% 
-  # filter(!!sym(species) != 0) %>% 
+  filter(!!sym(species) != 0) %>%
   ggplot() +
-  geom_boxplot(aes_string(y = species))
+  geom_histogram(aes(y = !!sym(species)), bins = bins) +
+  coord_flip() +
+  theme_minimal()
 
-data[[1]] %>% select(Poaceae) %>% unique
+
 
 ```
 
