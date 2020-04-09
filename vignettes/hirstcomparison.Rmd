@@ -1,6 +1,8 @@
 ---
 title: "test"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, include=FALSE}
@@ -10,6 +12,8 @@ library(tidyverse)
 library(lubridate)
 library(ggpubr)
 # library(Amelia) # only used for one fct call to missmap()
+
+devtools::load_all()
 
 # I like the look of these plots
 # devtools::install_github('cttobin/ggthemr')
@@ -197,13 +201,9 @@ Now let's plot some time series to get a better overview of the data.
 
 ```{r}
 
-# resolution = c("daily", "12hour", "6hour", "3hour", "hourly")
-# group = c("line", "trap")
-# traps = c(2, 4, 6)
-
-plot_pollen(species = "Poaceae", resolution = "6hour", group = "line", traps = 2)
-
-
+plot <- plot_pollen(species = "Poaceae", resolution = "daily", group = "line", traps = 2)
+# ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
+plot
 
 ```
 
