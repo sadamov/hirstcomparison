@@ -8,7 +8,12 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(lubridate)
+library(ggpubr)
 # library(Amelia) # only used for one fct call to missmap()
+
+# I like the look of these plots
+# devtools::install_github('cttobin/ggthemr')
+ggthemr::ggthemr("fresh")
 
 ```
 
@@ -92,10 +97,12 @@ If these values are outside of the blooming season then we don't have an issue, 
 
 ```{r}
 # Later measurements are NA for all traps and hence can be removed, to make sure that all traps and lines have the same amount of rows.
-data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"))) 
-data <- map(data, ~.x %>% drop_na()) # Current solution to remove all NAs from dataset
+map(data, ~Amelia::missmap(.x, y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)]))
 
-map(data, ~Amelia::missmap(.x))
+data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"))) 
+data <- map(data, ~.x %>% replace(is.na(.), 0)) # Current solution to remove all NAs from dataset
+
+
 
 ```
 
@@ -140,38 +147,38 @@ data_hourly <- map(data, ~.x %>%
 # map(data_hourly, ~.x %>% select(date, hour) %>% unique %>% nrow)
 # map(data_hourly, ~.x %>% slice(tail(row_number(), 10)))
 
-data_hours3 <- map(data_hourly, ~.x %>% 
+data_hours3 <- map(data, ~.x %>% 
   mutate(hours3 = case_when(
-    hour >= 0 & hour < 3 ~ "00:10 - 06:00",
-    hour >= 3 & hour < 6 ~ "06:10 - 12:00",
-    hour >= 6 & hour < 9 ~ "12:10 - 18:00",
-    hour >= 9 & hour < 12 ~ "18:10 - 24:00",
-    hour >= 12 & hour < 15 ~ "00:10 - 06:00",
-    hour >= 15 & hour < 18 ~ "06:10 - 12:00",
-    hour >= 18 & hour < 21 ~ "12:10 - 18:00",
-    hour >= 21 & hour < 24 ~ "18:10 - 24:00"
+    hour >= 0 & hour < 3 ~ "06:00",
+    hour >= 3 & hour < 6 ~ "12:00",
+    hour >= 6 & hour < 9 ~ "18:00",
+    hour >= 9 & hour < 12 ~ "24:00",
+    hour >= 12 & hour < 15 ~ "06:00",
+    hour >= 15 & hour < 18 ~ "12:00",
+    hour >= 18 & hour < 21 ~ "18:00",
+    hour >= 21 & hour < 24 ~ "24:00"
     )
   ) %>% 
   group_by(date, hours3, trap, line) %>% 
   summarise_at(vars(species_selection), ~mean(.)) %>% 
   ungroup())
 
-data_hours6 <- map(data_hourly, ~.x %>% 
+data_hours6 <- map(data, ~.x %>% 
   mutate(hours6 = case_when(
-    hour >= 0 & hour < 6 ~ "00:10 - 06:00",
-    hour >= 6 & hour < 12 ~ "06:10 - 12:00",
-    hour >= 12 & hour < 18 ~ "12:10 - 18:00",
-    hour >= 18 & hour < 24 ~ "18:10 - 24:00"
+    hour >= 1 & hour <= 6 ~ "06:00",
+    hour > 6 & hour <= 12 ~ "12:00",
+    hour > 12 & hour <= 18 ~ "18:00",
+    hour > 18 & hour <= 24 ~ "24:00"
     )
   ) %>% 
   group_by(date, hours6, trap, line) %>% 
   summarise_at(vars(species_selection), ~mean(.)) %>% 
   ungroup())
 
-data_hours12 <- map(data_hourly, ~.x %>% 
+data_hours12 <- map(data, ~.x %>% 
   mutate(hours12 = case_when(
-    hour >= 0 & hour < 12 ~ "00:10 - 12:00",
-    hour >= 12 & hour < 24 ~ "12:10 - 24:00"
+    hour >= 1 & hour <= 12 ~ "12:00",
+    hour > 12 & hour <= 24 ~ "24:00"
     )
   ) %>% 
   group_by(date, hours12, trap, line) %>% 
@@ -187,33 +194,16 @@ data_daily <- map(data_hourly, ~.x %>%
 
 
 Now let's plot some time series to get a better overview of the data.
-For better visibility I am displaying hourly sums as a minimum timespan.
 
 ```{r}
 
-species <- "Poaceae"
-data_plot <- data_daily %>% bind_rows
+# resolution = c("daily", "12hour", "6hour", "3hour", "hourly")
+# group = c("line", "trap")
+# traps = c(2, 4, 6)
 
-data_plot %>% 
-  # filter(!!sym(species) != 0) %>%
-  ggplot(aes(x = date)) +
-  geom_line(aes(y = !!sym(species), col = trap)) +
-  theme_minimal()
+plot_pollen(species = "Poaceae", resolution = "6hour", group = "line", traps = 2)
 
-bins <- data[[1]] %>% select(Poaceae) %>%  filter(!is.na(Poaceae), Poaceae != 0)%>% unique %>% pull %>% length
 
-data_daily[[1]] %>% 
-  # filter(!!sym(species) != 0) %>%
-  ggplot() +
-  geom_histogram(aes(y = !!sym(species)), bins = bins) +
-  coord_flip() +
-  theme_minimal()
-
-data_daily[[1]] %>% 
-  # filter(!!sym(species) != 0) %>%
-  ggplot() +
-  geom_boxplot(aes(y = !!sym(species))) +
-  theme_minimal()
 
 ```
 
