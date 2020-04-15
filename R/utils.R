@@ -4,15 +4,18 @@
 #' @param resolution What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 #' @param group Either compare traps or lines within traps c("line", "trap")
 #' @param traps Which traps should be plotted c(2, 4, 6)
+#' @param rm_zeros Should zero pollen measurements be removed from the plot
 #'
 #' @return A data frame with assets allocated to 5 main categories
 
 
-plot_pollen <- function(species, resolution, group, traps){
+plot_pollen <- function(species, resolution, group, traps, rm_zeros){
 
+  # If needed one can add ifelse clauses here to make function more robust
   title <- tools::toTitleCase(paste0(resolution, " average concentrations of ", species, " per ", group, " for trap(s) number ", paste(traps, collapse = ", ")))
   alpha <- 0.5
 
+  # The first plot needs actual datetimes for the x-axis, hence we need some complicated if statements
   if (resolution == "daily"){
     data_plot <- map(data_daily, ~.x %>%
                        mutate(timestamp = date))
@@ -32,8 +35,8 @@ plot_pollen <- function(species, resolution, group, traps){
 
   data_plot <- data_plot %>%
     bind_rows %>%
-    filter(!!sym(species) > 0,
-           trap %in% traps)
+    filter(trap %in% traps) %>%
+    {if(rm_zeros) filter(., !!(sym(species)) > 0) else .}
 
   gg1 <- data_plot %>%
     ggplot(aes(x = timestamp)) +
@@ -47,7 +50,7 @@ plot_pollen <- function(species, resolution, group, traps){
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    coord_cartesian(ylim = c(0, 300)) +
+    coord_cartesian(ylim = c(0, 400)) +
     labs(y = "Mean Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%

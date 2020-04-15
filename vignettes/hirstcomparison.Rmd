@@ -92,6 +92,13 @@ data = map(data, ~select(.x,
 
 ```
 
+The team in Payerne fuond that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer.
+The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollencounts per 10minutes are too high and should be reduced by a factor of 1.35.
+
+```{r}
+data <- map(data, ~mutate_at(.x, vars(species_selection), ~./1.35))
+```
+
 There are a few missing measurements, we will impute/exclude those in the next step.
 Generally, there if one species is NA at a certain time, then all species are NA.
 Hence we could assume that the traps had a malfunction during that time.
@@ -103,19 +110,31 @@ If these values are outside of the blooming season then we don't have an issue, 
 # Later measurements are NA for all traps and hence can be removed, to make sure that all traps and lines have the same amount of rows.
 map(data, ~Amelia::missmap(.x, y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)]))
 
-data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"))) 
-data <- map(data, ~.x %>% replace(is.na(.), 0)) # Current solution to remove all NAs from dataset
+# Make sure that all dataframes have the same amount of rows, working with max amount of data available
+data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"),
+                                 datetime >= as_datetime("2013-04-01 11:30:00"))) 
+
+# data <- map(data, ~.x %>% replace(is.na(.), 0)) # NAs are currently not imputed, there are some missing values though. In the functions below we remove NA whily executing summarising functions (e.g. sum(x, na.rm = TRUE))
+
+# We will exclude all timestamps where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig
+# We are mostly interested in timesteps where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season).
+data <- data %>% 
+  bind_rows %>%   
+  group_by(datetime) %>% 
+  mutate_at(vars(species_selection), function(x){
+      if(sum(x, na.rm = TRUE) > 0) 
+        return(x)
+      else 
+        return(NA_real_)
+  }) %>% 
+  ungroup %>% 
+  group_split(trap,line)
 
 
 
 ```
 
-The team in Payerne fuond that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer.
-The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollencounts per 10minutes are too high and should be reduced by a factor of 1.35.
 
-```{r}
-data <- map(data, ~mutate_at(.x, vars(species_selection), ~./1.35))
-```
 
 One of the questions is, how long the observation period should be for the Pollen traps to produce robust results on any specific day.
 The original timespan is 10minutes, we want to look at various average concentration (e.g. hourly, 3 hours, 6 hours, daily).
@@ -136,7 +155,7 @@ Die Tageswerte werden bei den Pollen glaub ich aus den Stundenwerten berechnet a
 # Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
 data_hourly <- map(data, ~.x %>% 
   group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(species_selection), ~mean(.)) %>% 
+  summarise_at(vars(species_selection), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 # # The data comes in a sorted format by date and time, below I check that the start and endpoint is the same when averaged hourly
@@ -164,7 +183,7 @@ data_hours3 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours3, trap, line) %>% 
-  summarise_at(vars(species_selection), ~mean(.)) %>% 
+  summarise_at(vars(species_selection), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours6 <- map(data, ~.x %>% 
@@ -176,7 +195,7 @@ data_hours6 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours6, trap, line) %>% 
-  summarise_at(vars(species_selection), ~mean(.)) %>% 
+  summarise_at(vars(species_selection), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours12 <- map(data, ~.x %>% 
@@ -186,13 +205,15 @@ data_hours12 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours12, trap, line) %>% 
-  summarise_at(vars(species_selection), ~mean(.)) %>% 
+  summarise_at(vars(species_selection), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_daily <- map(data_hourly, ~.x %>% 
                     group_by(date, trap, line) %>% 
-                    summarise_at(vars(species_selection), ~mean(.)) %>% 
+                    summarise_at(vars(species_selection), ~mean(., na.rm = TRUE)) %>% 
                     ungroup())
+
+map(data_daily, summary)
 
 ```
 
@@ -201,7 +222,7 @@ Now let's plot some time series to get a better overview of the data.
 
 ```{r}
 
-plot <- plot_pollen(species = "Poaceae", resolution = "daily", group = "line", traps = 2)
+plot <- plot_pollen(species = "Poaceae", resolution = "daily", group = "line", traps = 2, rm_zeros = TRUE)
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 plot
 
