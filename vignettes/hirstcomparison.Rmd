@@ -24,6 +24,11 @@ devtools::load_all()
 # devtools::install_github('cttobin/ggthemr')
 ggthemr::ggthemr("fresh")
 
+# caTools and bitops are required to knit this vignette, those are not tracked by renv and must be installed by the user
+# Due to old R-Version caTools must be installed from CRAN Archive, in order to knit markdown documents.
+# packageurl <- "http://cran.r-project.org/src/contrib/Archive/caTools/caTools_1.17.1.1.tar.gz"
+# install.packages(packageurl, repos=NULL, type="source")
+
 ```
 
 # Data
@@ -219,8 +224,6 @@ data_daily <- map(data_hourly, ~.x %>%
                     group_by(date, trap, line) %>% 
                     summarise_at(vars(species_selection), ~mean(., na.rm = TRUE)) %>% 
                     ungroup())
-
-map(data_daily, summary)
 
 ```
 
