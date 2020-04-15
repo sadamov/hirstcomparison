@@ -6,7 +6,11 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, 
+                      warnings = FALSE, 
+                      message = FALSE)
+
+# This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
 
 library(tidyverse)
 library(lubridate)
@@ -22,13 +26,15 @@ ggthemr::ggthemr("fresh")
 
 ```
 
-# Load Data
+# Data
+
+## Import
 
 ```{r}
 
 # The data was provided by Fiona Tummon, in form of 10-minute pollen counts.
 # The data prep until that point was not re-evaluated.
-# The datetimes were provided in a seperate file (tbd whether those are UTC or not)
+# The datetimes were provided in a seperate file (in local time)
 # PAY2, PAY4 and PAY8 are three different pollen traps
 # lines 2,4,6,7 are four different lines, along which the pollen were manually counted under the microsope.
 # Lines 2 and 6 were counted in 2013, whereas lines 4 and 7 were counted in 2019
@@ -69,14 +75,14 @@ dates <- map(dates_raw, ~mutate(
   )
 
 # Combining the measurements with the datetimes for the three traps
-# It appears that the traps have slightly different timestamps
+# It appears that the traps have slightly different observations (e.g. 9 minutes past the full hour instead of 10). This will have no impact, once the concentrations are averaged per hour
 data <- map2(data_raw, rep(1:3, each = 4), ~bind_cols(.x, dates[[.y]]) %>% mutate(trap = as.factor(2^(.y))))
 
 # Create a new variable to differentiate between counted lines; note that traps were already defined in the previous map-call above
 data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = as.factor(.y)))
 
 # We are only interested on a subset of the data
-# The rder of variables is different in the PAY2 and PAY6 data, those are the old counts from 2013
+# The order of variables is different in the PAY2 and PAY6 data, hence we quicly sort them here:
 species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
     "Urticacées", "Taxus", "Picea")
@@ -87,25 +93,25 @@ data = map(data, ~select(.x,
     khurtiz0, kataxuz0, kapicez0, datetime, date, hour, trap, line) %>% 
   setNames(c(species_selection, "datetime", "date", "hour", "trap", "line")))
 
-# map(dates, ~summary(.x))
-# map(data_raw, ~summary(.x))
-
-
 ```
 
-The team in Payerne fuond that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer.
-The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollencounts per 10minutes are too high and should be reduced by a factor of 1.35.
+## Data Bias Correction
+
+The team in Payerne found that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer.
+The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
 ```{r}
 data <- map(data, ~mutate_at(.x, vars(species_selection), ~./1.35))
 ```
 
 There are a few missing measurements, we will impute/exclude those in the next step.
-Generally, there if one species is NA at a certain time, then all species are NA.
+Generally, if one species is NA in one specific trap/line at a certain time, then all species are NA.
 Hence we could assume that the traps had a malfunction during that time.
 What is surprising though is the fact that not all lines have the same amount of NAs.
 This might suggest that some entries were omitted during the manual pollen counting exercise.
-If these values are outside of the blooming season then we don't have an issue, I will check this below.
+If these values are outside of the blooming season then we don't have an issue. This should be further evaluated.
+
+## Imputation and Timeframe Selection
 
 ```{r}
 # Later measurements are NA for all traps and hence can be removed, to make sure that all traps and lines have the same amount of rows.
@@ -117,8 +123,8 @@ data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"),
 
 # data <- map(data, ~.x %>% replace(is.na(.), 0)) # NAs are currently not imputed, there are some missing values though. In the functions below we remove NA whily executing summarising functions (e.g. sum(x, na.rm = TRUE))
 
-# We will exclude all timestamps where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig
-# We are mostly interested in timesteps where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season).
+# We will exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig
+# We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season).
 data <- data %>% 
   bind_rows %>%   
   group_by(datetime) %>% 
@@ -135,12 +141,12 @@ data <- data %>%
 
 ```
 
-
+## Aggregation
 
 One of the questions is, how long the observation period should be for the Pollen traps to produce robust results on any specific day.
-The original timespan is 10minutes, we want to look at various average concentration (e.g. hourly, 3 hours, 6 hours, daily).
+The original time span is 10minutes, we want to look at various average concentration (e.g. hourly, 3 hours, 6 hours, daily).
 
-There are some general guidelines from Reguöa Gehrig on how to average concentration that should be followed here.
+There are some general guidelines from Regula Gehrig on how to average concentration that should be followed here.
 
 Die Stundenwerte werden wie folgt aus den 10-Minutenwerten berechnet:
 z.B. Wert für 6:00 Uhr UTC wird berechnet aus 05:10 – 6:00 UTC
@@ -161,13 +167,13 @@ data_hourly <- map(data, ~.x %>%
 
 # # The data comes in a sorted format by date and time, below I check that the start and endpoint is the same when averaged hourly
 # # This is actually the case with the first measurement on 2013-04-01 11 o'clock and the last on 2013-07-01 - 10 o'clock (as trimmed above).
-# # All lines and traps show the same timestamps.
+# # All lines and traps show the same observations.
 # map(data_hourly, ~.x %>%
 #   slice(c(1, nrow(.x))) %>%
 #   rowid_to_column) %>%
 #   bind_rows() %>%
 #   arrange(rowid)
-# # All the traps have the same amount of unique timestamps
+# # All the traps have the same amount of unique observations
 # map(data_hourly, ~.x %>% select(date, hour) %>% unique %>% nrow)
 # map(data_hourly, ~.x %>% slice(tail(row_number(), 10)))
 
@@ -218,8 +224,9 @@ map(data_daily, summary)
 
 ```
 
+# Visualization
 
-Now let's plot some time series to get a better overview of the data.
+Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps.
 
 ```{r}
 
@@ -230,9 +237,19 @@ plot
 ```
 
 
+# Statistical Comparison
 
+## Parametric / ANOVA
 
+### F-Test
 
+### Contrasts / Tukey HSD
+
+## Non-Parametric / Rank-Based Symmetrical
+
+### Kruskal-Vallis Test
+
+### Dunn??
 
 
 
