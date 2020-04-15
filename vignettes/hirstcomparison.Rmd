@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(lubridate)
 library(ggpubr)
+library(here)
 # library(Amelia) # only used for one fct call to missmap()
 
 devtools::load_all()
@@ -222,9 +223,9 @@ Now let's plot some time series to get a better overview of the data.
 
 ```{r}
 
-plot <- plot_pollen(species = "Poaceae", resolution = "daily", group = "line", traps = 2, rm_zeros = TRUE)
-# ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
+plot <- plot_pollen(species = "Poaceae", resolution = "daily", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
+# ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 
 ```
 
