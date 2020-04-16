@@ -1,15 +1,22 @@
 ---
-title: "test"
+title: "Comparison of Pollen Traps"
+author: "Simon Adamov"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
+subtitle: Evaluation of Similarity and Robustness of Three Hirst-type Pollen Traps
+  Located in Payerne During the Blooming Season 2013
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, 
                       warnings = FALSE, 
-                      message = FALSE)
-
+                      message = FALSE,
+                      fig.retina = 1,
+                      fig.width = 16,
+                      fig.height = 9)
 # This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
 
 library(tidyverse)
@@ -30,6 +37,15 @@ ggthemr::ggthemr("fresh")
 # install.packages(packageurl, repos=NULL, type="source")
 
 ```
+Bioaerosols have important impacts on human health (EACCI, 2015; Pawankar et al., 2013) and agriculture (Cunha et al. 2016; Oteros et al. 2014), and serve as important indicators for identification of invasive species (Karrer et al., 2015; Sikoparija et al., 2009) and climate change (Zhang et al. 2015; Ziello et al. 2012). As such, networks to monitor these particles, particularly pollen and spores, have been established in many countries over the past decades (Hertel et al., 2013). At present, the majority of these networks employ manual methods based on Hirst-type volumetric samplers (Hirst, 1952) for monitoring purposes. Air sucked is drawn through these devices and particles impact onto a rotating tape, which is usually collected and analysed using light microscopy manually on a weekly basis.
+
+Standards to ensure comparability within and across networks have been established for routine monitoring of airborne pollen and spores (Galan et al. 2014; CEN/TS 16868, 2015). Nevertheless, these methods are known to suffer from a number of shortcomings, including collection efficiency onto the rotating tape (Orlandi et al,. 2014; Mandrioli et al., 1998),  errors in estimates of the flowrate used to calculate concentrations (Oteros et al., 2017), sampling efficiency (Sikoparija et al., 2011; Tormo-Molina et al., 1996; Käpylä and Penttinen 1981),  issues related to the manual counts (Rojo, 2019; Comptois et al., 1999; Pedersen and Moseholm, 1993), and quality control (Sikoparija et al., 2016; Berti et al. 2009). 
+
+While several studies have compared measurements from separate devices of the same kind, they have rarely been relatively few comparisons of more than two devices and often these have been at considerable distance from one another (e.g. Irdi et al., 2002; Gottardini and Cristofolini, 1997; Ekebom et al., 1997; Rizzi et al., 1992; Meiffren, 1988).  Molina et al. 2013 compared five traps at the same site and found significant differences in terms of the timing of peak pollen concentrations when hourly data were considered, however, no such differences were evident in the analysis of daily data. In contrast, Rojo et al. 2019 compared three devices in Munich, Germany, and two traps in Zrenjanin, Serbia, and found average standard deviations of 34% between Hirst-type traps, even when daily averages were considered. Although ratios of mean pollen concentrations between the instruments were mostly close to 1, they found that the standard deviations of the pollen concentrations varied significantly on the daily scale; a possible explanation for why no significant differences in previous work (Rojo et al., 2019). 
+
+Fully understanding all source of errors related to traditional manual measurements is particularly important given the advent of automatic pollen monitors based on new technologies such as image-recognition (Oteros et al., 2019?) and air-flow cytometry (Sauvageat et al., 2019; Crouzy et al., 2016). For validation purposes, these new, real-time instruments are compared against traditional, manual observations and it is thus essential to understand what level of error can be expected from the various measurement techniques to make robust comparisons. 
+
+In this study we compare measurements from three Hirst-type traps placed side-by-side in Payerne, Switzerland, from the pollen season of 2013. While these observations date back somewhat, counting methods have not changed significantly since and the data remain valid. We aim to investigate more fully the variability between measurements at the same location at both the daily and hourly scale. 
 
 # Data
 
@@ -86,7 +102,7 @@ data <- map2(data_raw, rep(1:3, each = 4), ~bind_cols(.x, dates[[.y]]) %>% mutat
 # Create a new variable to differentiate between counted lines; note that traps were already defined in the previous map-call above
 data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = as.factor(.y)))
 
-# We are only interested on a subset of the data
+# We are only interested on a subset of the data. The other species either have very low measurements in Switzerland, or they are not relevant from a medical point of view. This selection has been discussed with Regula Gehrig and has been used for a longer time now, is my understanding.
 # The order of variables is different in the PAY2 and PAY6 data, hence we quicly sort them here:
 species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
@@ -118,10 +134,18 @@ If these values are outside of the blooming season then we don't have an issue. 
 
 ## Imputation and Timeframe Selection
 
+There are some periods where the traps did not measure (possibly malfunction?). Those can be observed in the plot below, for trap 2 and line 2.
+
 ```{r}
 # Later measurements are NA for all traps and hence can be removed, to make sure that all traps and lines have the same amount of rows.
-map(data, ~Amelia::missmap(.x, y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)]))
+# map(data, ~Amelia::missmap(.x, y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)]))
+data[[1]] %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)])
 
+```
+
+We will exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison).
+
+```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
 data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"),
                                  datetime >= as_datetime("2013-04-01 11:30:00"))) 
@@ -142,7 +166,7 @@ data <- data %>%
   ungroup %>% 
   group_split(trap,line)
 
-
+data[[1]] %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)])
 
 ```
 
@@ -233,7 +257,7 @@ Now let's plot some time series to get a better overview of the data. In the plo
 
 ```{r}
 
-plot <- plot_pollen(species = "Poaceae", resolution = "daily", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+plot <- plot_pollen(species = "Alnus", resolution = "6hour", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 
@@ -241,6 +265,14 @@ plot
 
 
 # Statistical Comparison
+
+The analysis should also serve as a base for a scientific publication. We want to assess the robustness and similarity of the Hirst traps. For that purpose we will compare the measured Pollen concentrations for the three different traps and also the four lines. Thereby, we vary:
+
+- The temporal resolution for the calculation of the mean concentrations
+- Buckets of Pollen concentrations, to distinguish between high and low blooming season
+- The threshold below which Pollen measurements are set to NA (because they become unreliable)
+
+There are two pathways to evaluate the similarity of the measurements between the traps (measurers). One can either transform the measurements (log), so that they are normally distributed and then work with ANOVA, F-Test and Tukey Honestly Significance Difference (HSD); or one can take the measurements as is (counts per m³) and work with the non-parametric Kruskal-Vallis Test that only requires rank-symmetry but doesn't assume any underlying distribution of the data. For the non-parametric contrats multiple options present themselves that we will investigate below.
 
 ## Parametric / ANOVA
 
@@ -252,11 +284,35 @@ plot
 
 ### Kruskal-Vallis Test
 
-### Dunn??
+### Dunn's test, the Conover-Iman test, and the Dwass-Steel-Crichtlow-Fligner
 
 
+# Error / Residual Analysis
 
+A second chapter of the paper should futher elaborate on the relative errors between the traps.
+We are mostly interested to observe the relative error of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
 
+# Some Thoughts
+
+A short review of the methods applied in the draft paper so far. I would like to lay out why the methods used above are probably a preferred choice to compare the traps.
+
+## Pairwise vs. Contrasts
+
+Problem of multiple testing
+
+## Non-parametric vs. parametric
+
+Assumption of linearity is harder to achieve without adding much benefit (wilcox vs. t-test)
+
+## linear regression vs. ordinary least products regression analysis 
+
+Geometric mean regression, reduced major axis regression take into account that both y and x contain measurement errors.
+If measurements have been made on a continuous scale, the main choice is between the Altman–Bland method of differ-
+ences and least products regression analysis. It is argued that although the former is relatively simple to execute, it does not
+distinguish adequately between ﬁxed and proportional bias. Least products regression analysis, although more difﬁcult to
+execute, does achieve this goal. There is almost universal agreement among biostatisticians that the Pearson product–moment
+correlation coefﬁcient (r) is valueless as a test for bias.
+http://www.jerrydallal.com/LHSP/compare.htm
 
 
 
