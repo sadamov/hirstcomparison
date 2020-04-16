@@ -36,6 +36,7 @@ plot_pollen <- function(species, resolution, group, traps, rm_zeros){
   data_plot <- data_plot %>%
     bind_rows %>%
     filter(trap %in% traps) %>%
+    mutate_at(vars("trap", "line"), ~ as.factor(.)) %>%
     {if(rm_zeros) filter(., !!(sym(species)) > 0) else .}
 
   gg1 <- data_plot %>%
