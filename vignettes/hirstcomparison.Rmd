@@ -112,11 +112,13 @@ species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fag
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
     "Urticacées", "Taxus", "Picea")
 
-data = map(data, ~select(.x, 
+data <- map(data, ~select(.x, 
     kacastz0, kaalnuz0, kaulmuz0, kacuprz0, kafraxz0, kafaguz0, kajuglz0, khplanz0, kacoryz0, 
     kapinuz0, kaquerz0, khrumez0, kaplatz0, kapopuz0, khpoacz0, kasaliz0, kabetuz0, kacarpz0, 
     khurtiz0, kataxuz0, kapicez0, datetime, date, hour, trap, line) %>% 
   setNames(c(species_selection, "datetime", "date", "hour", "trap", "line")))
+
+data <- map(data, ~mutate(.x, Total = rowSums(.[1:length(species_selection)], na.rm = TRUE)))
 
 ```
 
@@ -126,7 +128,7 @@ The team in Payerne found that the air sucking rates of the Hirst traps are actu
 The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
 ```{r}
-data <- map(data, ~mutate_at(.x, vars(all_of(species_selection)), ~./1.35))
+data <- map(data, ~mutate_at(.x, vars(all_of(species_selection), Total), ~./1.35))
 ```
 
 There are a few missing measurements, we will impute/exclude those in the next step.
@@ -195,7 +197,7 @@ Die Tageswerte werden bei den Pollen glaub ich aus den Stundenwerten berechnet a
 # Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
 data_hourly <- map(data, ~.x %>% 
   group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 # # The data comes in a sorted format by date and time, below I check that the start and endpoint is the same when averaged hourly
@@ -223,7 +225,7 @@ data_hours3 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours3, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours6 <- map(data, ~.x %>% 
@@ -235,7 +237,7 @@ data_hours6 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours6, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours12 <- map(data, ~.x %>% 
@@ -245,12 +247,12 @@ data_hours12 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours12, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_daily <- map(data_hourly, ~.x %>% 
                     group_by(date, trap, line) %>% 
-                    summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+                    summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
                     ungroup())
 
 ```
@@ -261,7 +263,7 @@ Now let's plot some time series to get a better overview of the data. In the plo
 
 ```{r}
 
-plot <- plot_pollen(species = "Alnus", resolution = "6hour", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+plot <- plot_pollen(species = "Total", resolution = "daily", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 
@@ -296,7 +298,7 @@ Below we prepare the data averaging between the four lines in each trap. As we w
 ```{r}
 
 resolution <- "daily"
-species <- "Betula"
+species <- "Total"
 
 if (resolution == "daily"){
   data_anova <- map(data_daily, ~.x %>%
@@ -319,11 +321,11 @@ data_anova <- data_anova %>%
   bind_rows() %>% 
   mutate(trap = as.factor(trap)) %>% 
   group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup 
 
 data_transformed <- data_anova %>% 
-  mutate_at(vars(all_of(species_selection)), ~log(. + 1))
+  mutate_at(vars(all_of(species_selection), Total), ~log(. + 1))
   
 # There are various methods to deal with zeros during log transformation
 # 
@@ -389,9 +391,10 @@ deterministic pattern). We don't plot the smoothing line as loess (and other) al
 
 tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
   ggplot(aes(x = fitted, y = resid)) +
-  geom_point() +
+  geom_point(alpha = 0.5) +
   # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3]) +
+  coord_cartesian(ylim = c(-500, 500))
 
 ```
 
@@ -400,7 +403,7 @@ tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_ra
 
 tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
   ggplot(aes(x = fitted, y = resid)) +
-  geom_point() +
+  geom_point(alpha = 0.5) +
   # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
 
@@ -414,6 +417,18 @@ violation of the independence assumption. We can do so by using a so-called inde
 residuals against time. For positively dependendent residuals we would see time periods where most residuals
 have the same sign, while for negatively dependent residuals, the residuals would “jump” too often from
 positive to negative compared to independent residuals.
+
+```{r}
+
+resid <- residuals(fit_anova_raw, type = "pearson")
+resid_df <- tibble(resid = resid, id = as.numeric(names(resid)))
+
+tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
+  left_join(resid_df, by = "id") %>% 
+  ggplot(aes(x = time, y = resid)) +
+  geom_point() +
+  geom_line()
+```
 
 ```{r}
 
