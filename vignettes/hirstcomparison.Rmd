@@ -408,11 +408,24 @@ tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted
 
 - are the errors independent?
 
+If the data has some serial structure (i.e., if observations were recorded in a certain time order), we typically
+want to check whether residuals close in time are more similar than residuals far apart, as this would be a
+violation of the independence assumption. We can do so by using a so-called index plot where we plot the
+residuals against time. For positively dependendent residuals we would see time periods where most residuals
+have the same sign, while for negatively dependent residuals, the residuals would “jump” too often from
+positive to negative compared to independent residuals.
+
 ```{r}
 
+resid <- residuals(fit_anova, type = "pearson")
+resid_df <- tibble(resid = resid, id = as.numeric(names(resid)))
+
+tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
+  left_join(resid_df, by = "id") %>% 
+  ggplot(aes(x = time, y = resid)) +
+  geom_point() +
+  geom_line()
 ```
-
-
 
 ### Contrasts / Tukey HSD
 
