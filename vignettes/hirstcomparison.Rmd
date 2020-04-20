@@ -3,10 +3,10 @@ title: "Comparison of Pollen Traps"
 author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
-  word_document: default
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 subtitle: Evaluation of Similarity and Robustness of Three Hirst-type Pollen Traps
   Located in Payerne During the Blooming Season 2013
 ---
@@ -26,6 +26,7 @@ library(tidyverse)
 library(lubridate)
 library(ggpubr)
 library(here)
+
 # library(Amelia) # only used for one fct call to missmap()
 
 devtools::load_all()
@@ -295,7 +296,7 @@ Below we prepare the data averaging between the four lines in each trap. As we w
 ```{r}
 
 resolution <- "daily"
-species <- "Poaceae"
+species <- "Betula"
 
 if (resolution == "daily"){
   data_anova <- map(data_daily, ~.x %>%
@@ -322,7 +323,7 @@ data_anova <- data_anova %>%
   ungroup 
 
 data_transformed <- data_anova %>% 
-  mutate_at(vars(all_of(species_selection)), ~sqrt(log(. + 1)))
+  mutate_at(vars(all_of(species_selection)), ~log(. + 1))
   
 # There are various methods to deal with zeros during log transformation
 # 
@@ -360,7 +361,7 @@ is correct. By default, a standard normal distribution is the theoretical “ref
 ```{r}
 fit_anova_raw <- aov(as.formula(paste(species, "~ trap")), data = data_anova, contrasts = c("contr.sum", "contr.poly"))
 
-tibble(residuals = fit_anova_raw$residuals) %>% 
+tibble(residuals = residuals(fit_anova_raw, type = "pearson")) %>% 
   ggplot(aes(sample = residuals)) +
   stat_qq() +
   stat_qq_line()
@@ -369,7 +370,7 @@ tibble(residuals = fit_anova_raw$residuals) %>%
 They are definitely not and we have to do some adjustments. So for the folowing plot we logarithmised the data to deal with the right-skewedness. The best results were achieved by first logarithmising the data and then taking the square root.
 
 ```{r}
-tibble(residuals = fit_anova$residuals) %>% 
+tibble(residuals = residuals(fit_anova, type = "pearson")) %>% 
   ggplot(aes(sample = residuals)) +
   stat_qq() +
   stat_qq_line()
@@ -381,13 +382,29 @@ tibble(residuals = fit_anova$residuals) %>%
 
 The Tukey-Anscombe plot plots the residuals rij vs. the fitted values bμi. It allows us to check whether
 the residuals have constant variance and whether the residuals have mean zero (i.e. they don’t show any
-deterministic pattern).
-plot(fit, which = 1)
+deterministic pattern). We don't plot the smoothing line as loess (and other) algorithms have issuess when the same value is repeated a large number of times (jitter did not really help).
+
 ```{r}
+# plot(fit_anova, which = 1)
+
+tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
+  ggplot(aes(x = fitted, y = resid)) +
+  geom_point() +
+  # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
 
 ```
 
+```{r}
+# plot(fit_anova, which = 1)
 
+tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
+  ggplot(aes(x = fitted, y = resid)) +
+  geom_point() +
+  # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
+
+```
 
 - are the errors independent?
 

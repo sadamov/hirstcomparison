@@ -4,7 +4,7 @@
 \alias{plot_pollen}
 \title{Create a Comparison Plot of Pollen Concentrations for different traps and lines}
 \usage{
-plot_pollen(species, resolution, group, traps)
+plot_pollen(species, resolution, group, traps, rm_zeros)
 }
 \arguments{
 \item{species}{The selected Pollen Type}
@@ -14,6 +14,8 @@ plot_pollen(species, resolution, group, traps)
 \item{group}{Either compare traps or lines within traps c("line", "trap")}
 
 \item{traps}{Which traps should be plotted c(2, 4, 6)}
+
+\item{rm_zeros}{Should zero pollen measurements be removed from the plot}
 }
 \value{
 A data frame with assets allocated to 5 main categories
