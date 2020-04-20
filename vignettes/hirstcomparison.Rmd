@@ -444,6 +444,20 @@ tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
 
 ### Contrasts / Tukey HSD
 
+The F-test is rather unspecific. It basically gives us a “Yes/No” answer for the question “is there any
+treatment effect at all?”. It doesn’t tell us what specific treatment (or treatment combination) is significant.
+Quite often we have a more specific question than the aforementioned global null hypothesis. E.g., we might
+want to compare a set of new treatments vs. a control treatment or we want to do pairwise comparisons
+between many (or all) treatments.
+Multiple Testing: The problem with all statistical tests is the fact that the (overall) error rate increases with increasing number
+of tests.
+
+```{r}
+hsd <- TukeyHSD(fit_anova)
+plot(hsd)
+```
+
+
 ## Non-Parametric / Rank-Based Symmetrical
 
 ### Kruskal-Vallis Test
