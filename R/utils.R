@@ -51,15 +51,15 @@ plot_pollen <- function(species, resolution, group, traps, rm_zeros){
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    coord_cartesian(ylim = c(0, 400)) +
+    coord_cartesian(ylim = c(0, 600)) +
     labs(y = "Mean Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
     ggplot() +
     geom_histogram(aes(y = !!sym(species), fill = !!sym(group)), binwidth = 10, alpha = alpha) +
     facet_wrap(vars(!!sym(group)), ncol = 1) +
-    coord_flip(ylim = c(0,450)) +
     theme(legend.position = "bottom") +
+    coord_flip(ylim = c(0, 500)) +
     labs(x = "Occurence of Pollen Concentrations", y = "Mean Conc. [#Pollen/m³]")
 
   ggarrange(ggarrange(gg1, gg2, nrow = 2), gg3) %>%

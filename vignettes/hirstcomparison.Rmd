@@ -26,6 +26,7 @@ library(tidyverse)
 library(lubridate)
 library(ggpubr)
 library(here)
+library(lme4)
 
 # library(Amelia) # only used for one fct call to missmap()
 
@@ -263,7 +264,7 @@ Now let's plot some time series to get a better overview of the data. In the plo
 
 ```{r}
 
-plot <- plot_pollen(species = "Total", resolution = "daily", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+plot <- plot_pollen(species = "Total", resolution = "6hour", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 
@@ -297,7 +298,7 @@ Below we prepare the data averaging between the four lines in each trap. As we w
 
 ```{r}
 
-resolution <- "daily"
+resolution <- "6hour"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -427,7 +428,7 @@ tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
   left_join(resid_df, by = "id") %>% 
   ggplot(aes(x = time, y = resid)) +
   geom_point() +
-  geom_line()
+  geom_line(alpha = 0.3)
 ```
 
 ```{r}
@@ -439,7 +440,7 @@ tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
   left_join(resid_df, by = "id") %>% 
   ggplot(aes(x = time, y = resid)) +
   geom_point() +
-  geom_line()
+  geom_line(alpha = 0.3)
 ```
 
 ### Contrasts / Tukey HSD
@@ -457,6 +458,28 @@ hsd <- TukeyHSD(fit_anova)
 plot(hsd)
 ```
 
+### Random Effects Model
+
+So far we have been looking at three traps in isolation. But they are part of a larger "population" of Hirst traps being used at MCH or worldwide. Hence we also should look at ANOVA with trap as a random effect. This needs a bit more data per trap, otherwise the model fitting does not reach convergence and produce a so-called singular fit (i.e. daily averages don't work).
+
+```{r}
+fit_lmer <- lmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
+isSingular(fit_lmer) # This has to be fixed!
+summary(fit_lmer)
+confint(fit_lmer, oldNames = FALSE)
+ranef(fit_lmer)
+confint(fit_anova)
+```
+
+```{r}
+plot(fit_lmer, which = 1)
+```
+
+```{r}
+par(mfrow = c(1, 2))
+qqnorm(ranef(fit_lmer)$trap[, "(Intercept)"], main = "Random effects")
+qqnorm(resid(fit_lmer), main = "Residuals")
+```
 
 ## Non-Parametric / Rank-Based Symmetrical
 
