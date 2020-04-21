@@ -22,6 +22,7 @@ knitr::opts_chunk$set(echo = FALSE,
                       out.height = "100%")
 # This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
 
+library(MASS)
 library(tidyverse)
 library(lubridate)
 library(ggpubr)
@@ -286,7 +287,7 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-resolution <- "6hour"
+resolution <- "12hour"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -338,16 +339,12 @@ The corr-test function from the psych handily offers this functionality.
 methods <- c("pearson", "spearman", "kendall")
 
 data_corr <- data_transformed %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
-  select(!!sym(species), trap) %>% 
-  group_by(trap) %>% 
-  mutate(rowid = row_number()) %>% 
-  ungroup() %>% 
-  pivot_wider(names_from = trap, values_from = Total, rowid) %>% 
-  select(-rowid) %>% 
-  setNames(paste0("trap", c(2, 4, 8)))
+  select(!!sym(species), trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  setNames(c("timestamp", paste0("trap", c(2, 4, 8))))
 
 corr_matrix <- map(methods, ~corr.test(
-  data_corr,
+  data_corr %>% select(-timestamp),
   use = "complete",
   method = .x,
   adjust = "holm",
@@ -584,6 +581,7 @@ data_anova %>%
   ggplot(aes(x = !!sym(species))) +
   geom_histogram(alpha = 0.7, bins = 100) +
   geom_freqpoly(col = ggthemr::swatch()[3], bins = 50) +
+  # geom_density(col = ggthemr::swatch()[5]) +
   geom_vline(xintercept = median(data_anova %>% pull(!!sym(species))), col = ggthemr::swatch()[4])
 
 ```
@@ -628,12 +626,27 @@ A second chapter of the paper should futher elaborate on the relative errors bet
 We are mostly interested to observe the relative error of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
 
 ```{r}
-data_corr %>% 
+rel_errors <- data_corr %>% 
   mutate(mean = (trap2 + trap4 + trap8) / 3) %>% 
   mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)/mean) %>% 
-  ggplot(aes(x=trap2)) +
-  geom_histogram(bins= 50)
+  pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap") %>% 
+  select(-mean)
+
+x <- seq(-1, 1, length.out = 100)
+norm_errors <- with(rel_errors, tibble(x = x, y = dnorm(x, mean = mean(error), sd = sd(error)/5)))
+t_shape <- fitdistr(rel_errors$error, "t")
+t_errors <- tibble(x = x, y = dt(x, df = 15))
+
+rel_errors %>% 
+  ggplot(aes(x=error , y = ..density..)) +
+  geom_histogram(bins= 50) +
+  geom_density(col = ggthemr::swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+  geom_line(data = norm_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
+  geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[8])
   
+sd(rel_errors$error)
+
 ```
 
 
