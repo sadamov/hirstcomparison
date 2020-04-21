@@ -27,6 +27,7 @@ library(lubridate)
 library(ggpubr)
 library(here)
 library(lme4)
+library(psych)
 
 # library(Amelia) # only used for one fct call to missmap()
 
@@ -281,21 +282,6 @@ The analysis should also serve as a base for a scientific publication. We want t
 
 There are two pathways to evaluate the similarity of the measurements between the traps (measurers). One can either transform the measurements (log), so that they are normally distributed and then work with ANOVA, F-Test and Tukey Honestly Significance Difference (HSD); or one can take the measurements as is (counts per m³) and work with the non-parametric Kruskal-Vallis Test that only requires rank-symmetry but doesn't assume any underlying distribution of the data. For the non-parametric contrats multiple options present themselves that we will investigate below.
 
-## Parametric / ANOVA
-
-First we compare the traps with the traditional ANOVA approach. Statistical inference (p-values, confidence intervals, . . . ) is only valid if the model assumptions are fulfilled. So far, this means (many paragraphs are quoted from Lukas Meier ETH - Script Applied Statistics ANOVA Course):
-
-- are the errors independent?
-- are the errors normally distributed?
-- is the error variance constant?
-- do the errors have mean zero?
-
-The first assumption is most crucial (but also most difficult to check). If the independence assumption is
-violated, statistical inference can be very inaccurate. In the ANOVA setting, the last assumption is typically
-not as important compared to a regression setting, as we are typically fitting “large” models.
-
-Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmise the measured concentrations.
-
 ```{r}
 
 resolution <- "6hour"
@@ -337,6 +323,88 @@ data_transformed <- data_anova %>%
   
   
 ```
+
+## Correlation
+
+The correlation between the traps can be calculated easily and then the CI and p-values must be adjusted for multiple comparison.
+The corr-test function from the psych handily offers this functionality.
+
+```{r}
+
+data_corr <- data_transformed %>% 
+  select(!!sym(species), trap) %>% 
+  group_by(trap) %>% 
+  mutate(rowid = row_number()) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = trap, values_from = Total, rowid) %>% 
+  select(-rowid) %>% 
+  setNames(paste0("trap", c(2, 4, 8)))
+
+corr_matrix <- corr.test(
+  data_corr,
+  use = "pairwise",
+  method = "pearson",
+  adjust = "holm",
+  alpha = .05,
+  ci = TRUE,
+  minlength = 5
+  )
+
+print(corr_matrix, short = FALSE)
+```
+
+```{r}
+
+ci <- corr_matrix$ci.adj %>% 
+  round(2) %>% 
+  mutate(ci = paste("R-adjusted:", lower.adj, "-", upper.adj)) %>% 
+  pull(ci)
+
+gg1 <- data_corr %>% 
+  ggplot(aes(x = trap2, y = trap4)) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(alpha = 0.2) +
+  geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
+  geom_label(label = ci[1], aes(x = 3, y = 9)) +
+  coord_cartesian(ylim = c(0, 10))
+
+gg2 <- data_corr %>% 
+  ggplot(aes(x = trap2, y = trap8)) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(alpha = 0.2) +
+  geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
+  geom_label(label = ci[1], aes(x = 3, y = 9)) +
+  coord_cartesian(ylim = c(0, 10))
+
+gg3 <- data_corr %>% 
+  ggplot(aes(x = trap4, y = trap8)) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(alpha = 0.2) +
+  geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
+  geom_label(label = ci[1], aes(x = 3, y = 9)) +
+  coord_cartesian(ylim = c(0, 10))
+
+title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
+
+ggarrange(gg1, gg2, gg3, ncol = 3) %>% 
+  annotate_figure(top = title)
+```
+
+
+## Parametric / ANOVA
+
+First we compare the traps with the traditional ANOVA approach. Statistical inference (p-values, confidence intervals, . . . ) is only valid if the model assumptions are fulfilled. So far, this means (many paragraphs are quoted from Lukas Meier ETH - Script Applied Statistics ANOVA Course):
+
+- are the errors independent?
+- are the errors normally distributed?
+- is the error variance constant?
+- do the errors have mean zero?
+
+The first assumption is most crucial (but also most difficult to check). If the independence assumption is
+violated, statistical inference can be very inaccurate. In the ANOVA setting, the last assumption is typically
+not as important compared to a regression setting, as we are typically fitting “large” models.
+
+Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmise the measured concentrations.
 
 ### F-Test / Omnibus-Test
 
@@ -486,7 +554,6 @@ qqnorm(resid(fit_lmer), main = "Residuals")
 ### Kruskal-Vallis Test
 
 ### Dunn's test, the Conover-Iman test, and the Dwass-Steel-Crichtlow-Fligner
-
 
 # Error / Residual Analysis
 
