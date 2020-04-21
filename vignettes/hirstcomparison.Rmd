@@ -28,6 +28,7 @@ library(ggpubr)
 library(here)
 library(lme4)
 library(psych)
+library(robustlmm)
 
 # library(Amelia) # only used for one fct call to missmap()
 
@@ -284,7 +285,7 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-resolution <- "6hour"
+resolution <- "daily"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -329,9 +330,13 @@ data_transformed <- data_anova %>%
 The correlation between the traps can be calculated easily and then the CI and p-values must be adjusted for multiple comparison.
 The corr-test function from the psych handily offers this functionality.
 
+### Pearson, Spearman and Kendall Correlation
+
 ```{r}
 
-data_corr <- data_transformed %>% 
+methods <- c("pearson", "spearman", "kendall")
+
+data_corr <- data_transformed %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
   select(!!sym(species), trap) %>% 
   group_by(trap) %>% 
   mutate(rowid = row_number()) %>% 
@@ -340,24 +345,29 @@ data_corr <- data_transformed %>%
   select(-rowid) %>% 
   setNames(paste0("trap", c(2, 4, 8)))
 
-corr_matrix <- corr.test(
+corr_matrix <- map(methods, ~corr.test(
   data_corr,
-  use = "pairwise",
-  method = "pearson",
+  use = "complete",
+  method = .x,
   adjust = "holm",
   alpha = .05,
   ci = TRUE,
   minlength = 5
-  )
+  ))
 
-print(corr_matrix, short = FALSE)
+dummy <- map(corr_matrix, ~.x %>% print(short = FALSE))
+
+
 ```
 
 ```{r}
 
-ci <- corr_matrix$ci.adj %>% 
+ci <- map(corr_matrix, ~.x %>% 
+  pluck(10)) %>% 
+  bind_rows() %>% 
   round(2) %>% 
-  mutate(ci = paste("R-adjusted:", lower.adj, "-", upper.adj)) %>% 
+  mutate(method = rep(methods, each = 3)) %>%  
+  mutate(ci = paste0("R-", tools::toTitleCase(method), ": ", lower.adj, " - ", upper.adj)) %>% 
   pull(ci)
 
 gg1 <- data_corr %>% 
@@ -365,31 +375,30 @@ gg1 <- data_corr %>%
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.2) +
   geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
-  geom_label(label = ci[1], aes(x = 3, y = 9)) +
-  coord_cartesian(ylim = c(0, 10))
+  geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 3.6, y = 9)) +
+  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg2 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap8)) + 
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.2) +
   geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
-  geom_label(label = ci[1], aes(x = 3, y = 9)) +
-  coord_cartesian(ylim = c(0, 10))
+  geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 3.6, y = 9)) +
+  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg3 <- data_corr %>% 
   ggplot(aes(x = trap4, y = trap8)) + 
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.2) +
   geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
-  geom_label(label = ci[1], aes(x = 3, y = 9)) +
-  coord_cartesian(ylim = c(0, 10))
+  geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 3.6, y = 9)) +
+  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
 
-ggarrange(gg1, gg2, gg3, ncol = 3) %>% 
-  annotate_figure(top = title)
+ggarrange(gg1, gg2, gg3, ncol = 3) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 ```
-
 
 ## Parametric / ANOVA
 
@@ -551,7 +560,54 @@ qqnorm(resid(fit_lmer), main = "Residuals")
 
 ## Non-Parametric / Rank-Based Symmetrical
 
-### Kruskal-Vallis Test
+### Kruskal-Wallis Test
+
+Kruskal-Wallis test by rank is a non-parametric alternative to one-way ANOVA test, which extends the two-samples Wilcoxon test in the situation where there are more than two groups. It’s recommended when the assumptions of one-way ANOVA test are not met. This tutorial describes how to compute Kruskal-Wallis test in R software. (http://www.sthda.com/english/wiki/kruskal-wallis-test-in-r)
+
+Assumptions
+
+The assumptions of the Kruskal-Wallis test are similar to those for the Wilcoxon-Mann-Whitney test.
+
+- Samples are random samples, or allocation to treatment group is random. 
+- The two samples are mutually independent. 
+- The measurement scale is at least ordinal, and the variable is continuous. 
+- If the test is used as a test of dominance, it has no distributional assumptions. If it used to compare medians, the distributions must be similar apart from their locations. 
+
+The test is generally considered to be robust to ties. However, if ties are present they should not be concentrated together in one part of the distribution (they should have either a normal or uniform distribution)
+https://influentialpoints.com/Training/kruskal-wallis_anova-principles-properties-assumptions.htm
+
+The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median. In other words, there should be roughly the same number of values above and below the median. This can be checked by visual inspection using histogram and density distribution.
+
+```{r}
+data_anova %>% 
+  ggplot(aes(x = !!sym(species))) +
+  geom_histogram(alpha = 0.7, bins = 100) +
+  geom_freqpoly(col = ggthemr::swatch()[3], bins = 50) +
+  geom_vline(xintercept = median(data_anova %>% pull(!!sym(species))), col = ggthemr::swatch()[4])
+
+```
+
+
+```{r}
+kruskal.test(as.formula(paste(species, "~ trap")), data = data_anova)
+```
+
+### Pairwise Wilcox
+
+```{r}
+pairwise.wilcox.test(data_anova %>% pull(!!sym(species)), 
+                     data_anova$trap,
+                     paired = FALSE,
+                     p.adjust.method = "fdr",
+                     conf.int = TRUE)
+```
+
+### Random Effects Model
+
+```{r}
+
+```
+
 
 ### Dunn's test, the Conover-Iman test, and the Dwass-Steel-Crichtlow-Fligner
 
