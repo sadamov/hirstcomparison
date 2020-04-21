@@ -285,7 +285,7 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-resolution <- "daily"
+resolution <- "6hour"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -605,6 +605,16 @@ pairwise.wilcox.test(data_anova %>% pull(!!sym(species)),
 ### Random Effects Model
 
 ```{r}
+fit_rlmer <- rlmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
+summary(fit_rlmer)
+
+fit_rlmer2 <- update(fit_rlmer, rho.sigma.e = psi2propII(smoothPsi, k = 1.5), rho.sigma.b = psi2propII(smoothPsi, k = 1.5))
+
+compare(fit_lmer, fit_rlmer, fit_rlmer2, show.rho.functions = FALSE)
+
+gg <- map(1:3, ~plot(fit_rlmer, which = .x))
+
+
 
 ```
 
@@ -615,6 +625,11 @@ pairwise.wilcox.test(data_anova %>% pull(!!sym(species)),
 
 A second chapter of the paper should futher elaborate on the relative errors between the traps.
 We are mostly interested to observe the relative error of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
+
+```{r}
+
+```
+
 
 # Some Thoughts
 
