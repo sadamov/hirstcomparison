@@ -156,8 +156,9 @@ We will exclude all observations where the measurement of all lines and traps is
 
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
-data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-07-01 10:00:00"),
-                                 datetime >= as_datetime("2013-04-01 11:30:00"))) 
+# It's probably better to work with full days only, so that each measurement independet of the aggregation window has the same meaning
+data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:10:00"),
+                                 datetime >= as_datetime("2013-04-02 00:10:00"))) 
 
 # data <- map(data, ~.x %>% replace(is.na(.), 0)) # NAs are currently not imputed, there are some missing values though. In the functions below we remove NA whily executing summarising functions (e.g. sum(x, na.rm = TRUE))
 
@@ -627,7 +628,12 @@ A second chapter of the paper should futher elaborate on the relative errors bet
 We are mostly interested to observe the relative error of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
 
 ```{r}
-
+data_corr %>% 
+  mutate(mean = (trap2 + trap4 + trap8) / 3) %>% 
+  mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)/mean) %>% 
+  ggplot(aes(x=trap2)) +
+  geom_histogram(bins= 50)
+  
 ```
 
 
