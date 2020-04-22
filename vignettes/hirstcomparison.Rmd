@@ -626,26 +626,47 @@ A second chapter of the paper should futher elaborate on the relative errors bet
 We are mostly interested to observe the relative error of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
 
 ```{r}
-rel_errors <- data_corr %>% 
+errors <- data_corr %>% 
   mutate(mean = (trap2 + trap4 + trap8) / 3) %>% 
-  mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)/mean) %>% 
+  mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)) %>% 
   pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap") %>% 
+  mutate(error_rel = error / mean) %>% 
   select(-mean)
 
-x <- seq(-1, 1, length.out = 100)
-norm_errors <- with(rel_errors, tibble(x = x, y = dnorm(x, mean = mean(error), sd = sd(error)/5)))
-t_shape <- fitdistr(rel_errors$error, "t")
-t_errors <- tibble(x = x, y = dt(x, df = 15))
+sd(errors$error)
+sd(errors$error_rel)
 
-rel_errors %>% 
+x_norm <- seq(-1, 1, length.out = 100)
+norm_errors_abs <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error), sd = sd(error)/2.5)))
+norm_errors_rel <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error_rel), sd = sd(error_rel))))
+
+gg_norm_abs <- errors %>% 
   ggplot(aes(x=error , y = ..density..)) +
-  geom_histogram(bins= 50) +
+  geom_histogram(bins= 100) +
   geom_density(col = ggthemr::swatch()[4]) +
   geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-  geom_line(data = norm_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
-  geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[8])
-  
-sd(rel_errors$error)
+  geom_line(data = norm_errors_abs, aes(x = x, y = y), col = ggthemr::swatch()[6]) 
+
+gg_norm_rel <- errors %>% 
+  ggplot(aes(x=error , y = ..density..)) +
+  geom_histogram(bins= 100) +
+  geom_density(col = ggthemr::swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+  geom_line(data = norm_errors_rel, aes(x = x, y = y), col = ggthemr::swatch()[6]) 
+
+ggarrange(gg_norm_abs, gg_norm_rel, nrow = 2) %>% 
+  annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
+                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator and a normal distribution. \n At the bottom the relative differences from the mean with a density kernel estimator and a t-distribution.", color = ggthemr::swatch()[1], face = "italic", size = 10))
+
+# x_t <- seq(-2, 2, length.out = 100)
+# t_shape <- fitdistr(rel_errors$error, "t")
+# t_errors <- tibble(x = x_t, y = dt(x_t, df = t_shape$estimate[3]))
+# gg_t_rel <- errors %>% 
+#   ggplot(aes(x=error , y = ..density..)) +
+#   geom_histogram(bins= 50) +
+#   geom_density(col = ggthemr::swatch()[4]) +
+#   geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+#   geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) 
 
 ```
 
