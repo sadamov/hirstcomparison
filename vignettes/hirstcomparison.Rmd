@@ -22,6 +22,7 @@ knitr::opts_chunk$set(echo = FALSE,
                       out.height = "100%")
 # This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
 
+library(caTools)
 library(MASS)
 library(tidyverse)
 library(lubridate)
@@ -287,7 +288,7 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-resolution <- "12hour"
+resolution <- "3hour"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -637,8 +638,8 @@ sd(errors$error)
 sd(errors$error_rel)
 
 x_norm <- seq(-1, 1, length.out = 100)
-norm_errors_abs <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error), sd = sd(error)/2.5)))
-norm_errors_rel <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error_rel), sd = sd(error_rel))))
+norm_errors_abs <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error, na.rm = TRUE), sd = sd(error, na.rm = TRUE)/2.1)))
+norm_errors_rel <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error_rel, na.rm = TRUE), sd = sd(error_rel, na.rm = TRUE))))
 
 gg_norm_abs <- errors %>% 
   ggplot(aes(x=error , y = ..density..)) +
@@ -658,17 +659,27 @@ ggarrange(gg_norm_abs, gg_norm_rel, nrow = 2) %>%
   annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
                   bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator and a normal distribution. \n At the bottom the relative differences from the mean with a density kernel estimator and a t-distribution.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 
-# x_t <- seq(-2, 2, length.out = 100)
-# t_shape <- fitdistr(rel_errors$error, "t")
-# t_errors <- tibble(x = x_t, y = dt(x_t, df = t_shape$estimate[3]))
-# gg_t_rel <- errors %>% 
-#   ggplot(aes(x=error , y = ..density..)) +
-#   geom_histogram(bins= 50) +
-#   geom_density(col = ggthemr::swatch()[4]) +
-#   geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-#   geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) 
+```
+
+```{r}
+
+x_t <- seq(-1, 1, length.out = 100)
+t_shape <- fitdistr(errors$error, "t") # QRM::fit.st(errors$error) leads to same result without warning
+m <- t_shape$estimate[1]
+s <- t_shape$estimate[2]
+df <- t_shape$estimate[3]
+
+t_errors <- tibble(x = x_t, y = dt((x_t - m) / s, df = df))
+gg_t_rel <- errors %>%
+  ggplot(aes(x=error , y = ..probability..)) +
+  geom_histogram(bins= 50) +
+  geom_density(col = ggthemr::swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+  geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6])
+
 
 ```
+
 
 
 # Some Thoughts
