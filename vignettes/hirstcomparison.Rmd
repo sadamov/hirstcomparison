@@ -31,6 +31,7 @@ library(here)
 library(lme4)
 library(psych)
 library(robustlmm)
+library(goftest)
 
 # library(Amelia) # only used for one fct call to missmap()
 
@@ -288,7 +289,7 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-resolution <- "3hour"
+resolution <- "6hour"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -634,52 +635,81 @@ errors <- data_corr %>%
   mutate(error_rel = error / mean) %>% 
   select(-mean)
 
-sd(errors$error)
-sd(errors$error_rel)
+sd(errors$error, na.rm = TRUE)
+sd(errors$error_rel, na.rm = TRUE)
 
-x_norm <- seq(-1, 1, length.out = 100)
-norm_errors_abs <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error, na.rm = TRUE), sd = sd(error, na.rm = TRUE)/2.1)))
-norm_errors_rel <- with(errors, tibble(x = x_norm, y = dnorm(x_norm, mean = mean(error_rel, na.rm = TRUE), sd = sd(error_rel, na.rm = TRUE))))
+x <- seq(-2.5, 2.5, length.out = 500)
+t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(errors$error) leads to same result without warning
+m <- t_shape$estimate[1]
+s <- t_shape$estimate[2]
+df <- t_shape$estimate[3]
+t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
 
-gg_norm_abs <- errors %>% 
-  ggplot(aes(x=error , y = ..density..)) +
+t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel)], "t") # QRM::fit.st(errors$error) leads to same result without warning
+m_rel <- t_shape_rel$estimate[1]
+s_rel <- t_shape_rel$estimate[2]
+df_rel <- t_shape_rel$estimate[3]
+t_errors_rel <- tibble(x = x, y = dt((x - m_rel) / s_rel, df = df_rel) / s_rel)
+
+gg_t_abs <- errors %>%
+  ggplot(aes(x=error, y = ..density..)) +
   geom_histogram(bins= 100) +
   geom_density(col = ggthemr::swatch()[4]) +
   geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-  geom_line(data = norm_errors_abs, aes(x = x, y = y), col = ggthemr::swatch()[6]) 
+  geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
+  coord_cartesian(xlim = c(-5, 5))
 
-gg_norm_rel <- errors %>% 
-  ggplot(aes(x=error , y = ..density..)) +
+gg_t_rel <- errors %>%
+  ggplot(aes(x=error_rel, y = ..density..)) +
   geom_histogram(bins= 100) +
   geom_density(col = ggthemr::swatch()[4]) +
   geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-  geom_line(data = norm_errors_rel, aes(x = x, y = y), col = ggthemr::swatch()[6]) 
+  geom_line(data = t_errors_rel, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
+  coord_cartesian(xlim = c(-2, 2))
 
-ggarrange(gg_norm_abs, gg_norm_rel, nrow = 2) %>% 
+ggarrange(gg_t_abs, gg_t_rel, nrow = 2) %>% 
   annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
-                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator and a normal distribution. \n At the bottom the relative differences from the mean with a density kernel estimator and a t-distribution.", color = ggthemr::swatch()[1], face = "italic", size = 10))
+                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator and a Student-t distribution. \n At the bottom the relative differences from the mean.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 
 ```
 
 ```{r}
 
-x_t <- seq(-1, 1, length.out = 100)
-t_shape <- fitdistr(errors$error, "t") # QRM::fit.st(errors$error) leads to same result without warning
-m <- t_shape$estimate[1]
-s <- t_shape$estimate[2]
-df <- t_shape$estimate[3]
+sample <- tibble(x = (x-m)/s, y = pt((x-m)/s, df = df))
+sample_rel <- tibble(x = (x-m_rel)/s_rel, y = pt((x-m_rel)/s_rel, df = df))
 
-t_errors <- tibble(x = x_t, y = dt((x_t - m) / s, df = df))
-gg_t_rel <- errors %>%
-  ggplot(aes(x=error , y = ..probability..)) +
-  geom_histogram(bins= 50) +
-  geom_density(col = ggthemr::swatch()[4]) +
-  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-  geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6])
+errors %>% 
+  ggplot(aes(x = error)) +
+  stat_ecdf(geom = "step", pad = FALSE) +
+  coord_cartesian(xlim = c(-5, 5)) +
+  geom_line(data = sample, aes(x = x, y = y))
+
+errors %>% 
+  ggplot(aes(x = error_rel)) +
+  stat_ecdf(geom = "step", pad = FALSE) +
+  coord_cartesian(xlim = c(-5, 5)) +
+  geom_line(data = sample_rel, aes(x = x, y = y))
 
 
 ```
 
+
+```{r}
+errors %>% 
+  mutate(error_scaled = (error)) %>%
+  ggplot(aes(sample = error_scaled)) +
+  stat_qq(distribution = qt, dparams = as.list(df)) +
+  stat_qq_line(distribution = qt, dparams = as.list(df))
+```
+
+```{r}
+cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+cvm.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
+
+ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
+
+```
 
 
 # Some Thoughts
