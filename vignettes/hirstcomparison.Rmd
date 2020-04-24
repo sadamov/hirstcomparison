@@ -1,5 +1,6 @@
 ---
 title: "Comparison of Pollen Traps"
+subtitle: "Evaluation of Similarity and Robustness of Three Hirst-type Pollen Traps Located in Payerne During the Blooming Season 2013"
 author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 output:
@@ -7,15 +8,14 @@ output:
     df_print: paged
   pdf_document: default
   word_document: default
-subtitle: Evaluation of Similarity and Robustness of Three Hirst-type Pollen Traps
-  Located in Payerne During the Blooming Season 2013
+
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, 
                       warnings = FALSE, 
                       message = FALSE,
-                      fig.retina =3,
+                      fig.retina =4,
                       fig.width = 10,
                       fig.height = 6,
                       out.width = "100%",
@@ -32,8 +32,10 @@ library(lme4)
 library(psych)
 library(robustlmm)
 library(goftest)
+library(kableExtra)
 
 # library(Amelia) # only used for one fct call to missmap()
+# library(data.table) # only used for transpose()
 
 devtools::load_all()
 
@@ -58,6 +60,11 @@ Fully understanding all source of errors related to traditional manual measureme
 In this study we compare measurements from three Hirst-type traps placed side-by-side in Payerne, Switzerland, from the pollen season of 2013. While these observations date back somewhat, counting methods have not changed significantly since and the data remain valid. We aim to investigate more fully the variability between measurements at the same location at both the daily and hourly scale. 
 
 # Data
+
+Three Hirst-type traps (Burkard Manufacturing, UK) were co-located on the roof of the Federal Office of Meteorology and Climatology MeteoSwiss building in Payerne, Switzerland. The roof is flat and at a height of 7m. The Hirst-type traps were placed in a line, approximately 3m from each other. The study period ran from 26 March to 25 July 2013 and the three Hirst-type traps operated simultaneously for this entire period.
+
+The three Hirst-type traps (numbered 2, 4, and 8) were carefully calibrated and set for seven-day sampling using Melinex tape coated with silicon (Lanzoni, Italy). The volume of air sampled was checked each week using a flowmeter when the drums were exchanged. Tapes were cut into seven daily segments and mounted onto microscope slides. Two longitudinal scans were counted on each slide using an Olympus microscope with a 600x magnification and, at a later stage, two additional lines were counted at 400x magnification. An average of all four lines was taken to calculate the final concentrations. P Data are expressed as daily average concentrations (pollen grains/m3). 
+All pollen types were counted and included in the “total pollen” category. We also selected 20 individual pollen types for a more precise comparison: Urtica, Castanea, Salix, Platanus, Betula, Alnus, Corylus, Fraxinus, Rumex, Taxus, Cupressus, Poaceae, Ulmus, Populus, Plantago, Quercus, Fagus Juglans Carpinus, Picea, and Pinus. This list aims to include the most important pollen types measured during the 2013 campaign in Payerne and to cover wide range of pollen sizes to provide a better understanding of how pollen counts vary with grain size. 
 
 ## Import
 
@@ -114,17 +121,15 @@ data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = .y))
 
 # We are only interested on a subset of the data. The other species either have very low measurements in Switzerland, or they are not relevant from a medical point of view. This selection has been discussed with Regula Gehrig and has been used for a longer time now, is my understanding.
 # The order of variables is different in the PAY2 and PAY6 data, hence we quicly sort them here:
-species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupress", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
+species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupressus", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
-    "Urticacées", "Taxus", "Picea")
+    "Urtica", "Taxus", "Picea")
 
 data <- map(data, ~select(.x, 
     kacastz0, kaalnuz0, kaulmuz0, kacuprz0, kafraxz0, kafaguz0, kajuglz0, khplanz0, kacoryz0, 
     kapinuz0, kaquerz0, khrumez0, kaplatz0, kapopuz0, khpoacz0, kasaliz0, kabetuz0, kacarpz0, 
     khurtiz0, kataxuz0, kapicez0, datetime, date, hour, trap, line) %>% 
   setNames(c(species_selection, "datetime", "date", "hour", "trap", "line")))
-
-data <- map(data, ~mutate(.x, Total = rowSums(.[1:length(species_selection)], na.rm = TRUE)))
 
 ```
 
@@ -134,7 +139,7 @@ The team in Payerne found that the air sucking rates of the Hirst traps are actu
 The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
 ```{r}
-data <- map(data, ~mutate_at(.x, vars(all_of(species_selection), Total), ~./1.35))
+data <- map(data, ~mutate_at(.x, vars(all_of(species_selection)), ~./1.35))
 ```
 
 There are a few missing measurements, we will impute/exclude those in the next step.
@@ -160,8 +165,9 @@ We will exclude all observations where the measurement of all lines and traps is
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
 # It's probably better to work with full days only, so that each measurement independet of the aggregation window has the same meaning
-data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:10:00"),
+data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:00:00"),
                                  datetime >= as_datetime("2013-04-02 00:10:00"))) 
+
 
 # data <- map(data, ~.x %>% replace(is.na(.), 0)) # NAs are currently not imputed, there are some missing values though. In the functions below we remove NA whily executing summarising functions (e.g. sum(x, na.rm = TRUE))
 
@@ -185,6 +191,50 @@ data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col =
 
 ## Aggregation
 
+### By Species
+
+Five concentration classes were defined for the analysis: 0-10 pollen grains/m3, 10-20 pollen grains/m3, 20-50 pollen grains/m3, 50-100 pollen grains/m3, 100-300 grains/m3, and >300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error.
+Furthermore, to investigate the impact of pollen size on sampling and measurement error, five groups of pollen were defined according to their average sizes (Beug, XXXX):
+
+- Group 1: Urtica, Castanea
+- Group 2: Alnus, Betula, Corylus, Fraxinus, Platanus, Rumex, Salix
+- Group 3: Plantago, Poaceae, Populus, Taxus, Cupressus, Ulmus
+- Group 4: Carpinus, Fagus, Juglans, Quercus
+- Group 5: Pinus, Picea
+
+```{r}
+
+Group10_20 <- c("Urtica", "Castanea")
+Group20_50 <- c("Alnus", "Betula", "Corylus", "Fraxinus", "Platanus", "Rumex", "Salix")
+Group50_100 <- c("Plantago", "Poaceae", "Populus", "Taxus", "Cupressus", "Ulmus")
+Group100_300 <- c("Carpinus", "Fagus", "Juglans", "Quercus")
+Group300 <- c("Pinus", "Picea")
+
+data <- map(data, ~.x %>% 
+  mutate(Group10_20 = if_else(!is.na(Urtica) | !is.na(Castanea), 
+                              rowSums(.[names(.x) %in% Group10_20], na.rm = TRUE), 
+                              NA_real_),
+         Group20_50 = if_else(!is.na(Alnus) | !is.na(Betula) | !is.na(Corylus) | !is.na(Fraxinus) | !is.na(Platanus) | !is.na(Rumex) | !is.na(Salix), 
+                              rowSums(.[names(.x) %in% Group20_50], na.rm = TRUE), 
+                              NA_real_),
+         Group50_100 = if_else(!is.na(Plantago) | !is.na(Poaceae) | !is.na(Populus) | !is.na(Taxus) | !is.na(Cupressus) | !is.na(Ulmus), 
+                               rowSums(.[names(.x) %in% Group50_100], na.rm = TRUE), 
+                               NA_real_),
+         Group100_300 = if_else(!is.na(Carpinus) | !is.na(Fagus) | !is.na(Juglans) | !is.na(Quercus), 
+                                rowSums(.[names(.x) %in% Group100_300], na.rm = TRUE), 
+                                NA_real_),
+         Group300 = if_else(!is.na(Pinus) | !is.na(Picea),
+                                rowSums(.[names(.x) %in% Group300], na.rm = TRUE), 
+                                NA_real_),
+         Total = if_else(!is.na(Group10_20) | !is.na(Group20_50) | !is.na(Group50_100) | !is.na(Group100_300) | !is.na(Group300), 
+                         rowSums(.[names(.x) %in% species_selection], na.rm = TRUE), 
+                         NA_real_)))
+
+```
+
+
+### Temporal
+
 One of the questions is, how long the observation period should be for the Pollen traps to produce robust results on any specific day.
 The original time span is 10minutes, we want to look at various average concentration (e.g. hourly, 3 hours, 6 hours, daily).
 
@@ -204,8 +254,9 @@ Die Tageswerte werden bei den Pollen glaub ich aus den Stundenwerten berechnet a
 # Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
 data_hourly <- map(data, ~.x %>% 
   group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
+
 
 # # The data comes in a sorted format by date and time, below I check that the start and endpoint is the same when averaged hourly
 # # This is actually the case with the first measurement on 2013-04-01 11 o'clock and the last on 2013-07-01 - 10 o'clock (as trimmed above).
@@ -221,7 +272,7 @@ data_hourly <- map(data, ~.x %>%
 
 data_hours3 <- map(data, ~.x %>% 
   mutate(hours3 = case_when(
-    hour >= 0 & hour < 3 ~ "06:00",
+    hour >= 1 & hour < 3 ~ "06:00",
     hour >= 3 & hour < 6 ~ "12:00",
     hour >= 6 & hour < 9 ~ "18:00",
     hour >= 9 & hour < 12 ~ "24:00",
@@ -232,7 +283,7 @@ data_hours3 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours3, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours6 <- map(data, ~.x %>% 
@@ -244,7 +295,7 @@ data_hours6 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours6, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours12 <- map(data, ~.x %>% 
@@ -254,23 +305,99 @@ data_hours12 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours12, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_daily <- map(data_hourly, ~.x %>% 
                     group_by(date, trap, line) %>% 
-                    summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
+                    summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
                     ungroup())
 
+
 ```
+
+# Tabular Comparison of Various Metrics
+
+```{r}
+
+occurence <- data_daily %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(. !=0, na.rm = TRUE)) %>% 
+  ungroup() 
+
+names <- names(occurence)
+
+occurence <- occurence %>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  select(name, trap2, trap4, trap8) %>% 
+  filter(name != "trap")
+
+maximum <- data_daily %>% 
+  bind_rows %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average <- data_daily %>% 
+  bind_rows %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+spi <- data_daily %>% # Not sure if this daily sume is correct
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+
+occurence %>% 
+  inner_join(maximum, by = "name") %>% 
+  inner_join(average, by = "name") %>% 
+  inner_join(spi, by = "name") %>% 
+  filter(name %in% species_selection) %>% 
+  arrange(desc(trap8.y.y)) %>% 
+  setNames(c("Name", rep(paste0("trap", c(2, 4, 8)), times = 4))) %>% 
+  kable(escape = FALSE) %>%
+  kable_styling(c("striped", "condensed"), full_width = FALSE) %>% 
+  add_header_above(c(" " = 1, "Frequency of Occurence" = 3, "Maximum Daily Concentration" = 3, "Average Daily Concentration" = 3, "Seasonal Pollen Integral" = 3)) %>% 
+  column_spec(1, italic = TRUE) %>% 
+  column_spec(2:13, width = "2.5cm")
+
+```
+
 
 # Visualization
 
 Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps.
 
-```{r}
+```{r }
 
-plot <- plot_pollen(species = "Total", resolution = "6hour", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+plot <- plot_pollen(species = "Group100_300", resolution = "3hour", group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 
@@ -285,11 +412,13 @@ The analysis should also serve as a base for a scientific publication. We want t
 - Buckets of Pollen concentrations, to distinguish between high and low blooming season
 - The threshold below which Pollen measurements are set to NA (because they become unreliable)
 
+In addition Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998). Average and maximum concentrations were also calculated, as well as the standard deviations for both daily and hourly values.
+
 There are two pathways to evaluate the similarity of the measurements between the traps (measurers). One can either transform the measurements (log), so that they are normally distributed and then work with ANOVA, F-Test and Tukey Honestly Significance Difference (HSD); or one can take the measurements as is (counts per m³) and work with the non-parametric Kruskal-Vallis Test that only requires rank-symmetry but doesn't assume any underlying distribution of the data. For the non-parametric contrats multiple options present themselves that we will investigate below.
 
 ```{r}
 
-resolution <- "6hour"
+resolution <- "12hour"
 species <- "Total"
 
 if (resolution == "daily"){
@@ -313,11 +442,11 @@ data_anova <- data_anova %>%
   bind_rows() %>% 
   mutate(trap = as.factor(trap)) %>% 
   group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
   ungroup 
 
 data_transformed <- data_anova %>% 
-  mutate_at(vars(all_of(species_selection), Total), ~log(. + 1))
+  mutate_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~log(. + 1))
   
 # There are various methods to deal with zeros during log transformation
 # 
@@ -328,6 +457,7 @@ data_transformed <- data_anova %>%
   
   
 ```
+
 
 ## Correlation
 
@@ -355,7 +485,7 @@ corr_matrix <- map(methods, ~corr.test(
   minlength = 5
   ))
 
-dummy <- map(corr_matrix, ~.x %>% print(short = FALSE))
+# dummy <- map(corr_matrix, ~.x %>% print(short = FALSE))
 
 
 ```
@@ -710,6 +840,10 @@ ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = T
 ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
 
 ```
+
+
+## For Different Pollen Concentration Groups
+
 
 
 # Some Thoughts
