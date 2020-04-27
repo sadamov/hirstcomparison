@@ -11,6 +11,15 @@ output:
 
 ---
 
+```{r}
+##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
+
+species <- "Total"
+resolution <- "daily"
+
+```
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, 
                       warnings = FALSE, 
@@ -36,6 +45,8 @@ library(kableExtra)
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
+# library(dunn.test)
+# library(conover.test)
 
 devtools::load_all()
 
@@ -67,6 +78,8 @@ The three Hirst-type traps (numbered 2, 4, and 8) were carefully calibrated and 
 All pollen types were counted and included in the “total pollen” category. We also selected 20 individual pollen types for a more precise comparison: Urtica, Castanea, Salix, Platanus, Betula, Alnus, Corylus, Fraxinus, Rumex, Taxus, Cupressus, Poaceae, Ulmus, Populus, Plantago, Quercus, Fagus Juglans Carpinus, Picea, and Pinus. This list aims to include the most important pollen types measured during the 2013 campaign in Payerne and to cover wide range of pollen sizes to provide a better understanding of how pollen counts vary with grain size. 
 
 ## Import
+
+
 
 ```{r}
 
@@ -397,9 +410,6 @@ Now let's plot some time series to get a better overview of the data. In the plo
 
 ```{r }
 
-resolution <- "6hour"
-species <- "Total"
-
 plot <- plot_pollen(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
@@ -530,6 +540,96 @@ ggarrange(gg1, gg2, gg3, ncol = 3) %>%
   annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 ```
 
+### Altman-Bland Plots
+
+```{r}
+
+data_altman <- data_anova %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+    pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
+    setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+    mutate(mean24 = if_else(!is.na(trap2) | !is.na(trap4),
+                          rowSums(.[2:3], na.rm = TRUE) / 2, 
+                          NA_real_),
+           mean28 = if_else(!is.na(trap2) | !is.na(trap8),
+                          rowSums(.[c(2, 4)], na.rm = TRUE) / 2, 
+                          NA_real_),
+           mean48 = if_else(!is.na(trap4) | !is.na(trap8),
+                          rowSums(.[3:4], na.rm = TRUE) / 2, 
+                          NA_real_),
+           diff24 = trap4 - trap2,
+           diff28 = trap8 - trap2,
+           diff48 = trap8 - trap4)
+
+gg_ab1 <- data_altman %>% 
+  ggplot(aes(x = mean24, y = diff24)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(0, 2000), ylim = c(-500, 500)) +
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
+  geom_smooth(alpha = 0.2)
+  
+gg_ab2 <- data_altman %>% 
+  ggplot(aes(x = mean28, y = diff28)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(0, 2000), ylim = c(-500, 500)) +
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
+  geom_smooth(alpha = 0.2)
+
+gg_ab3 <- data_altman %>% 
+  ggplot(aes(x = mean48, y = diff48)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(0, 2000), ylim = c(-500, 500)) +
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
+  geom_smooth(alpha = 0.2)
+
+ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3)
+
+```
+
+```{r}
+
+data_altman <- data_transformed %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+    pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
+    setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+    mutate(mean24 = if_else(!is.na(trap2) | !is.na(trap4),
+                          rowSums(.[2:3], na.rm = TRUE) / 2, 
+                          NA_real_),
+           mean28 = if_else(!is.na(trap2) | !is.na(trap8),
+                          rowSums(.[c(2, 4)], na.rm = TRUE) / 2, 
+                          NA_real_),
+           mean48 = if_else(!is.na(trap4) | !is.na(trap8),
+                          rowSums(.[3:4], na.rm = TRUE) / 2, 
+                          NA_real_),
+           diff24 = trap4 - trap2,
+           diff28 = trap8 - trap2,
+           diff48 = trap8 - trap4)
+
+gg_ab1 <- data_altman %>% 
+  ggplot(aes(x = mean24, y = diff24)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(3, 8), ylim = c(-1, 1)) +  
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
+  geom_smooth(alpha = 0.2)
+  
+gg_ab2 <- data_altman %>% 
+  ggplot(aes(x = mean28, y = diff28)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(3, 8), ylim = c(-1, 1)) +  
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
+  geom_smooth(alpha = 0.2)
+
+gg_ab3 <- data_altman %>% 
+  ggplot(aes(x = mean48, y = diff48)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = c(3, 8), ylim = c(-1, 1)) +  
+  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
+  geom_smooth(alpha = 0.2)
+
+ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3)
+
+```
+
 ## Parametric / ANOVA
 
 First we compare the traps with the traditional ANOVA approach. Statistical inference (p-values, confidence intervals, . . . ) is only valid if the model assumptions are fulfilled. So far, this means (many paragraphs are quoted from Lukas Meier ETH - Script Applied Statistics ANOVA Course):
@@ -568,22 +668,23 @@ In a QQ-plot we plot the empirical quantiles (“what we see in the data”) vs.
 we expect from the model”). The plot should show a more or less straight line if the distributional assumption
 is correct. By default, a standard normal distribution is the theoretical “reference distribution”.
 
-```{r}
-fit_anova_raw <- aov(as.formula(paste(species, "~ trap")), data = data_anova, contrasts = c("contr.sum", "contr.poly"))
-
-tibble(residuals = residuals(fit_anova_raw, type = "pearson")) %>% 
-  ggplot(aes(sample = residuals)) +
-  stat_qq() +
-  stat_qq_line()
-```
-
 They are definitely not and we have to do some adjustments. So for the folowing plot we logarithmised the data to deal with the right-skewedness. The best results were achieved by first logarithmising the data and then taking the square root.
 
 ```{r}
-tibble(residuals = residuals(fit_anova, type = "pearson")) %>% 
+fit_anova_raw <- aov(as.formula(paste(species, "~ trap")), data = data_anova, contrasts = c("contr.sum", "contr.poly"))
+
+gg_res1 <- tibble(residuals = residuals(fit_anova_raw, type = "pearson")) %>% 
   ggplot(aes(sample = residuals)) +
   stat_qq() +
   stat_qq_line()
+
+gg_res2 <- tibble(residuals = residuals(fit_anova, type = "pearson")) %>% 
+  ggplot(aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line()
+
+ggarrange(gg_res1, gg_res2, nrow = 1)
+
 ```
 
 
@@ -597,25 +698,24 @@ deterministic pattern). We don't plot the smoothing line as loess (and other) al
 ```{r}
 # plot(fit_anova, which = 1)
 
-tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
+gg_tukey1 <- tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
   ggplot(aes(x = fitted, y = resid)) +
-  geom_point(alpha = 0.5) +
+  geom_point(alpha = 0.5, position = position_jitter(width = 5, height = 0)) +
   # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3]) +
   coord_cartesian(ylim = c(-500, 500))
 
-```
+gg_tukey2 <- 
+  tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
+    ggplot(aes(x = fitted, y = resid)) +
+    geom_point(alpha = 0.5, position = position_jitter(width = 0.02, height = 0)) +
+    # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+    geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
 
-```{r}
-# plot(fit_anova, which = 1)
-
-tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
-  ggplot(aes(x = fitted, y = resid)) +
-  geom_point(alpha = 0.5) +
-  # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
+ggarrange(gg_tukey1, gg_tukey2)
 
 ```
+
 
 - are the errors independent?
 
@@ -631,23 +731,23 @@ positive to negative compared to independent residuals.
 resid <- residuals(fit_anova_raw, type = "pearson")
 resid_df <- tibble(resid = resid, id = as.numeric(names(resid)))
 
-tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
+gg_timeline1 <- tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
   left_join(resid_df, by = "id") %>% 
   ggplot(aes(x = time, y = resid)) +
   geom_point() +
   geom_line(alpha = 0.3)
-```
-
-```{r}
 
 resid <- residuals(fit_anova, type = "pearson")
 resid_df <- tibble(resid = resid, id = as.numeric(names(resid)))
 
-tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
+gg_timeline2 <- tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
   left_join(resid_df, by = "id") %>% 
   ggplot(aes(x = time, y = resid)) +
   geom_point() +
   geom_line(alpha = 0.3)
+
+ggarrange(gg_timeline1, gg_timeline2, nrow = 2)
+
 ```
 
 ### Contrasts / Tukey HSD
@@ -723,14 +823,29 @@ data_anova %>%
 kruskal.test(as.formula(paste(species, "~ trap")), data = data_anova)
 ```
 
-### Pairwise Wilcox
+### Pairwise Wilcox, Dunn's test, the Conover-Iman test, and the Dwass-Steel-Crichtlow-Fligner
 
 ```{r}
-pairwise.wilcox.test(data_anova %>% pull(!!sym(species)), 
+
+dunn.test::dunn.test(data_anova %>% pull(!!sym(species)),
                      data_anova$trap,
-                     paired = FALSE,
-                     p.adjust.method = "fdr",
-                     conf.int = TRUE)
+                     method = "holm")
+
+conover.test::conover.test(data_anova %>% pull(!!sym(species)),
+                     data_anova$trap,
+                     method = "holm")
+
+```
+
+
+```{r}
+# # This is incorrect, see: https://stats.stackexchange.com/questions/71996/differences-between-dwass-steel-critchlow-fligner-and-mann-whitney-u-test-for-a
+# 
+# pairwise.wilcox.test(data_anova %>% pull(!!sym(species)), 
+#                      data_anova$trap,
+#                      paired = FALSE,
+#                      p.adjust.method = "fdr",
+#                      conf.int = TRUE)
 ```
 
 ### Random Effects Model
@@ -750,7 +865,8 @@ gg <- map(1:3, ~plot(fit_rlmer, which = .x))
 ```
 
 
-### Dunn's test, the Conover-Iman test, and the Dwass-Steel-Crichtlow-Fligner
+
+
 
 # Error / Residual Analysis
 
@@ -759,7 +875,9 @@ We are mostly interested to observe the relative error of one specific trap comp
 
 ```{r}
 errors <- data_corr %>% 
-  mutate(mean = (trap2 + trap4 + trap8) / 3) %>% 
+  mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
+                          rowSums(.[2:4], na.rm = TRUE) / 3, 
+                          NA_real_)) %>% 
   mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)) %>% 
   pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap") %>% 
   mutate(error_rel = error / mean) %>% 
@@ -769,13 +887,14 @@ sd(errors$error, na.rm = TRUE)
 sd(errors$error_rel, na.rm = TRUE)
 
 x <- seq(-2.5, 2.5, length.out = 2000)
-t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(errors$error) leads to same result without warning
+t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
+
 m <- t_shape$estimate[1]
 s <- t_shape$estimate[2]
 df <- t_shape$estimate[3]
 t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
 
-t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel)], "t") # QRM::fit.st(errors$error) leads to same result without warning
+t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
 m_rel <- t_shape_rel$estimate[1]
 s_rel <- t_shape_rel$estimate[2]
 df_rel <- t_shape_rel$estimate[3]
@@ -863,36 +982,46 @@ for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300
     select(-mean)
   
   sd <- sd(errors$error, na.rm = TRUE)
-  t_shape <- QRM::fit.st(errors$error[!is.na(errors$error)]) # Actually lead to the same result as the bootstrapped version below
+  e <- simpleError("test error")
+  t_shape <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
   # t_shape <- QRM::fit.mst(errors$error, method = "Brent", upper = 2, lower = 1, nit = 2000, tol = 1e-10) # https://magesblog.com/post/2013-03-12-how-to-use-optim-in-r/ or here https://stat.ethz.ch/R-manual/R-devel/library/stats/html/optim.html
-  m <- t_shape$par.ests[2]
-  s <- t_shape$par.ests[3]
-  df <- t_shape$par.ests[1]
-  t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
-  
-  # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
-  
-  for (i in 1:1000) {
-    cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
-    ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+  class(t_shape)
+  if (class(t_shape) != "try-error"){
+    m <- t_shape$par.ests[2]
+    s <- t_shape$par.ests[3]
+    df <- t_shape$par.ests[1]
+    t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
     
-    cvm[i] <- cvm_test$p.value
-    ad[i] <- ad_test$p.value
+    # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
+    
+    for (i in 1:1000) {
+      cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+      ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+      
+      cvm[i] <- cvm_test$p.value
+      ad[i] <- ad_test$p.value
+    }
+    
+    cvm <- mean(cvm)
+    ad <- mean(ad)
   }
-  
-  cvm <- mean(cvm)
-  ad <- mean(ad)
   
   gg[[j]] <- errors %>%
     ggplot(aes(x=error, y = ..density..)) +
     geom_histogram(bins= 100) +
     geom_density(col = ggthemr::swatch()[4]) +
-    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5])
+  
+  if (class(t_shape) != "try-error"){
+    gg[[j]] <- gg[[j]] +
     geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
     coord_cartesian(xlim = c(-2.5, 2.5)) +
-    geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 2)) +
-    geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 2, y = 2))
+    geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 1)) +
+    geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 2, y = 1))
+  }
+    
 }
+
 
 ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2)
 
