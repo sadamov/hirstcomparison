@@ -21,10 +21,11 @@ resolution <- "daily"
 
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, 
-                      warnings = FALSE, 
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE, 
+                      warning = FALSE, 
                       message = FALSE,
-                      fig.retina =4,
+                      fig.retina =2.5,
                       fig.width = 10,
                       fig.height = 6,
                       out.width = "100%",
@@ -60,9 +61,9 @@ ggthemr::ggthemr("fresh")
 # install.packages(packageurl, repos=NULL, type="source")
 
 ```
-Bioaerosols have important impacts on human health (EACCI, 2015; Pawankar et al., 2013) and agriculture (Cunha et al. 2016; Oteros et al. 2014), and serve as important indicators for identification of invasive species (Karrer et al., 2015; Sikoparija et al., 2009) and climate change (Zhang et al. 2015; Ziello et al. 2012). As such, networks to monitor these particles, particularly pollen and spores, have been established in many countries over the past decades (Hertel et al., 2013). At present, the majority of these networks employ manual methods based on Hirst-type volumetric samplers (Hirst, 1952) for monitoring purposes. Air sucked is drawn through these devices and particles impact onto a rotating tape, which is usually collected and analysed using light microscopy manually on a weekly basis.
+Bio-aerosols have important impacts on human health (EACCI, 2015; Pawankar et al., 2013) and agriculture (Cunha et al. 2016; Oteros et al. 2014), and serve as important indicators for identification of invasive species (Karrer et al., 2015; Sikoparija et al., 2009) and climate change (Zhang et al. 2015; Ziello et al. 2012). As such, networks to monitor these particles, particularly pollen and spores, have been established in many countries over the past decades (Hertel et al., 2013). At present, the majority of these networks employ manual methods based on Hirst-type volumetric samplers (Hirst, 1952) for monitoring purposes. Air sucked is drawn through these devices and particles impact onto a rotating tape, which is usually collected and analysed using light microscopy manually on a weekly basis.
 
-Standards to ensure comparability within and across networks have been established for routine monitoring of airborne pollen and spores (Galan et al. 2014; CEN/TS 16868, 2015). Nevertheless, these methods are known to suffer from a number of shortcomings, including collection efficiency onto the rotating tape (Orlandi et al,. 2014; Mandrioli et al., 1998),  errors in estimates of the flowrate used to calculate concentrations (Oteros et al., 2017), sampling efficiency (Sikoparija et al., 2011; Tormo-Molina et al., 1996; Käpylä and Penttinen 1981),  issues related to the manual counts (Rojo, 2019; Comptois et al., 1999; Pedersen and Moseholm, 1993), and quality control (Sikoparija et al., 2016; Berti et al. 2009). 
+Standards to ensure comparability within and across networks have been established for routine monitoring of airborne pollen and spores (Galan et al. 2014; CEN/TS 16868, 2015). Nevertheless, these methods are known to suffer from a number of shortcomings, including collection efficiency onto the rotating tape (Orlandi et al,. 2014; Mandrioli et al., 1998),  errors in estimates of the flow-rate used to calculate concentrations (Oteros et al., 2017), sampling efficiency (Sikoparija et al., 2011; Tormo-Molina et al., 1996; Käpylä and Penttinen 1981),  issues related to the manual counts (Rojo, 2019; Comptois et al., 1999; Pedersen and Moseholm, 1993), and quality control (Sikoparija et al., 2016; Berti et al. 2009). 
 
 While several studies have compared measurements from separate devices of the same kind, they have rarely been relatively few comparisons of more than two devices and often these have been at considerable distance from one another (e.g. Irdi et al., 2002; Gottardini and Cristofolini, 1997; Ekebom et al., 1997; Rizzi et al., 1992; Meiffren, 1988).  Molina et al. 2013 compared five traps at the same site and found significant differences in terms of the timing of peak pollen concentrations when hourly data were considered, however, no such differences were evident in the analysis of daily data. In contrast, Rojo et al. 2019 compared three devices in Munich, Germany, and two traps in Zrenjanin, Serbia, and found average standard deviations of 34% between Hirst-type traps, even when daily averages were considered. Although ratios of mean pollen concentrations between the instruments were mostly close to 1, they found that the standard deviations of the pollen concentrations varied significantly on the daily scale; a possible explanation for why no significant differences in previous work (Rojo et al., 2019). 
 
@@ -74,20 +75,18 @@ In this study we compare measurements from three Hirst-type traps placed side-by
 
 Three Hirst-type traps (Burkard Manufacturing, UK) were co-located on the roof of the Federal Office of Meteorology and Climatology MeteoSwiss building in Payerne, Switzerland. The roof is flat and at a height of 7m. The Hirst-type traps were placed in a line, approximately 3m from each other. The study period ran from 26 March to 25 July 2013 and the three Hirst-type traps operated simultaneously for this entire period.
 
-The three Hirst-type traps (numbered 2, 4, and 8) were carefully calibrated and set for seven-day sampling using Melinex tape coated with silicon (Lanzoni, Italy). The volume of air sampled was checked each week using a flowmeter when the drums were exchanged. Tapes were cut into seven daily segments and mounted onto microscope slides. Two longitudinal scans were counted on each slide using an Olympus microscope with a 600x magnification and, at a later stage, two additional lines were counted at 400x magnification. An average of all four lines was taken to calculate the final concentrations. P Data are expressed as daily average concentrations (pollen grains/m3). 
+The three Hirst-type traps (numbered 2, 4, and 8) were carefully calibrated and set for seven-day sampling using Melinex tape coated with silicon (Lanzoni, Italy). The volume of air sampled was checked each week using a flow meter when the drums were exchanged. Tapes were cut into seven daily segments and mounted onto microscope slides. Two longitudinal scans were counted on each slide using an Olympus microscope with a 600x magnification and, at a later stage, two additional lines were counted at 400x magnification. An average of all four lines was taken to calculate the final concentrations. P Data are expressed as daily average concentrations (pollen grains/m3). 
 All pollen types were counted and included in the “total pollen” category. We also selected 20 individual pollen types for a more precise comparison: Urtica, Castanea, Salix, Platanus, Betula, Alnus, Corylus, Fraxinus, Rumex, Taxus, Cupressus, Poaceae, Ulmus, Populus, Plantago, Quercus, Fagus Juglans Carpinus, Picea, and Pinus. This list aims to include the most important pollen types measured during the 2013 campaign in Payerne and to cover wide range of pollen sizes to provide a better understanding of how pollen counts vary with grain size. 
 
 ## Import
 
-
-
 ```{r}
 
-# The data was provided by Fiona Tummon, in form of 10-minute pollen counts.
+# The data was provided by Fiona Tummon, in form of 10-minute pollen counts per line and trap.
 # The data prep until that point was not re-evaluated.
-# The datetimes were provided in a seperate file (in local time)
+# The datetimes were provided in a seperate file (in Payerne local time)
 # PAY2, PAY4 and PAY8 are three different pollen traps
-# lines 2,4,6,7 are four different lines, along which the pollen were manually counted under the microsope.
+# lines 2, 4, 6, 7 are four different lines, along which the pollen were manually counted under the microsope.
 # Lines 2 and 6 were counted in 2013, whereas lines 4 and 7 were counted in 2019
 
 path_data <- paste0(here::here(), "/ext-data/")
@@ -119,7 +118,7 @@ dates <- map(dates_raw, ~mutate(
   .x,
   time = sprintf("%04d", as.integer(X2)), # otherwise we lose leading zeros
   datetime = ymd_hm(paste0(X1, time)),
-  datetime_adj = datetime - minutes(10), # This is necessary to cope with the guidelines mentioned below
+  datetime_adj = datetime - minutes(10), # This is necessary to cope with the guidelines about hourly averages mentioned below
   hour = hour(datetime_adj) + 1,
   date = date(datetime_adj)) %>% 
   select(datetime, date, hour)
@@ -132,7 +131,7 @@ data <- map2(data_raw, rep(1:3, each = 4), ~bind_cols(.x, dates[[.y]]) %>% mutat
 # Create a new variable to differentiate between counted lines; note that traps were already defined in the previous map-call above
 data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = .y))
 
-# We are only interested on a subset of the data. The other species either have very low measurements in Switzerland, or they are not relevant from a medical point of view. This selection has been discussed with Regula Gehrig and has been used for a longer time now, is my understanding.
+# We are only interested on a subset of the data. The other species either have very low measurements in Switzerland, or they are not relevant from a medical point of view. This selection has been discussed with Regula Gehrig and has been used for a longer time now at MCH.
 # The order of variables is different in the PAY2 and PAY6 data, hence we quicly sort them here:
 species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupressus", "Fraxinus", "Fagus", "Juglans", "Plantago", "Corylus", 
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
@@ -148,32 +147,33 @@ data <- map(data, ~select(.x,
 
 ## Data Bias Correction
 
-The team in Payerne found that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer.
-The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
+The team in Payerne found that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer. The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
 ```{r}
 data <- map(data, ~mutate_at(.x, vars(all_of(species_selection)), ~./1.35))
 ```
 
-There are a few missing measurements, we will impute/exclude those in the next step.
-Generally, if one species is NA in one specific trap/line at a certain time, then all species are NA.
-Hence we could assume that the traps had a malfunction during that time.
-What is surprising though is the fact that not all lines have the same amount of NAs.
-This might suggest that some entries were omitted during the manual pollen counting exercise.
-If these values are outside of the blooming season then we don't have an issue. This should be further evaluated.
 
 ## Imputation and Timeframe Selection
 
-There are some periods where the traps did not measure (possibly malfunction?). Those can be observed in the plot below, for trap 2 and line 2.
+There are a few missing measurements.
+Generally, if one species is NA in one specific trap and line at a certain time, then all species are NA.
+Hence we could assume that the traps had a malfunction during that time.
+What is surprising though is the fact that not all lines have the same amount of NAs.
+This might suggest that some entries were omitted during the manual pollen counting exercise.
+If these values are outside of the blooming season then we don't have an issue. This should be further evaluated once a decision was made on which species will be evaluated in the paper.
+
 
 ```{r}
-# Later measurements are NA for all traps and hence can be removed, to make sure that all traps and lines have the same amount of rows.
-# map(data, ~Amelia::missmap(.x, y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)]))
-data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)])
+
+# map2(data, names(data), ~Amelia::missmap(as.data.frame(.x), y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = paste("Missingnes Map for", .y)))
+data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
 
 ```
 
-We will exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison).
+For now we leave these measurements as NA and will not plot them or impute values for statistical analyses.
+
+We will exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison). This is of course a deliberate choice, it was not the goal of the study to see how often all traps measured zero pollen. Everything strongly depends on this decision and the data preparation should be adjusted if other statistical questions are being evaluated.
 
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
@@ -181,11 +181,8 @@ We will exclude all observations where the measurement of all lines and traps is
 data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:00:00"),
                                  datetime >= as_datetime("2013-04-02 00:10:00"))) 
 
-
-# data <- map(data, ~.x %>% replace(is.na(.), 0)) # NAs are currently not imputed, there are some missing values though. In the functions below we remove NA whily executing summarising functions (e.g. sum(x, na.rm = TRUE))
-
-# We will exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig
 # We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season).
+# We could exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. But this can be achieved ba looking at the different concentration groups. To be discussed whether the total should not contain <10 Pollen/m³ concentrations.
 data <- data %>% 
   bind_rows %>%   
   group_by(datetime) %>% 
@@ -198,7 +195,7 @@ data <- data %>%
   ungroup %>% 
   group_split(trap,line)
 
-data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)])
+data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
 
 ```
 
@@ -207,7 +204,6 @@ data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col =
 ### By Species
 
 Five concentration classes were defined for the analysis: 0-10 pollen grains/m3, 10-20 pollen grains/m3, 20-50 pollen grains/m3, 50-100 pollen grains/m3, 100-300 grains/m3, and >300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error.
-Furthermore, to investigate the impact of pollen size on sampling and measurement error, five groups of pollen were defined according to their average sizes (Beug, XXXX):
 
 - Group 1: Urtica, Castanea
 - Group 2: Alnus, Betula, Corylus, Fraxinus, Platanus, Rumex, Salix
@@ -249,7 +245,7 @@ data <- map(data, ~.x %>%
 ### Temporal
 
 One of the questions is, how long the observation period should be for the Pollen traps to produce robust results on any specific day.
-The original time span is 10minutes, we want to look at various average concentration (e.g. hourly, 3 hours, 6 hours, daily).
+The original time span is 10 minutes, we want to look at various average concentration (e.g. hourly, 3 hours, 6 hours, daily).
 
 There are some general guidelines from Regula Gehrig on how to average concentration that should be followed here.
 
@@ -331,6 +327,8 @@ data_daily <- map(data_hourly, ~.x %>%
 
 # Tabular Comparison of Various Metrics
 
+Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998). 
+
 ```{r}
 
 occurence <- data_daily %>% 
@@ -373,7 +371,7 @@ average <- data_daily %>%
   filter(name != "trap") %>% 
   mutate_at(vars(starts_with("trap")), round)
 
-spi <- data_daily %>% # Not sure if this daily sume is correct
+spi <- data_daily %>% # Seasonal Pollen Integral
   bind_rows %>% 
   group_by(date, trap) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
@@ -397,16 +395,19 @@ occurence %>%
   setNames(c("Name", rep(paste0("trap", c(2, 4, 8)), times = 4))) %>% 
   kable(escape = FALSE) %>%
   kable_styling(c("striped", "condensed"), full_width = FALSE) %>% 
-  add_header_above(c(" " = 1, "Frequency of Occurence" = 3, "Maximum Daily Concentration" = 3, "Average Daily Concentration" = 3, "Seasonal Pollen Integral" = 3)) %>% 
+  add_header_above(c(" " = 1, "Frequency of Occurence [#Days]" = 3, "Maximum Daily Concentration [#Pollen/m³]" = 3, "Average Daily Concentration [#Pollen/m³]" = 3, "Seasonal Pollen Integral [#Pollen/m³]" = 3)) %>% 
   column_spec(1, italic = TRUE) %>% 
-  column_spec(2:13, width = "2.5cm")
+  column_spec(2:13, width = "2.5cm") %>% 
+  column_spec(seq(1, 13, 3), border_right = TRUE)
 
 ```
 
+As described above we averaged the Pollen Counts from the 4 lines per trap and can now compare the traps based on Various Metrics.
+Typically we see that trap 8 shows higher measurements for a variety of species. Once the species and temporal-average are fixed, this can be discussed in more detail.
 
 # Visualization
 
-Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps.
+Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window.
 
 ```{r }
 
@@ -419,15 +420,18 @@ plot
 
 # Statistical Comparison
 
-The analysis should also serve as a base for a scientific publication. We want to assess the robustness and similarity of the Hirst traps. For that purpose we will compare the measured Pollen concentrations for the three different traps and also the four lines. Thereby, we vary:
+The analysis should also serve as a base for a scientific publication. We want to assess the robustness and similarity of the Hirst traps. For that purpose we will compare the measured Pollen concentrations for the three different traps. We will assess the similarity between the three traps and test their robustness for different averaging windows. This task of comparing measures has been discussed in scientific literature for many decades and it is not an easy task. I will apply many different approaches to visually and mathematically check the similarity between the three measurements and will add some remarks about their pros, cons and underlying assumptions.. It is in the nature of the problem that no conclusion will be made at the end that holds with a 100% certainty. 
+
+Another goal of this analysis is to set up a pipeline (i.e. code construct) that can be sued to compare newer automatic pollen traps to the traditional Hirst traps. For that reason I try to keep the code as flexible and well structured as possible.
+
+These settings are crucial and should always be remembered when running the chunks below:
 
 - The temporal resolution for the calculation of the mean concentrations
-- Buckets of Pollen concentrations, to distinguish between high and low blooming season
-- The threshold below which Pollen measurements are set to NA (because they become unreliable)
+- The species or group of Pollen concentrations, to distinguish between high and low blooming season
+- The threshold below which Pollen measurements are set to NA (because they become unreliable) is set to 0 currently
 
-In addition Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998). Average and maximum concentrations were also calculated, as well as the standard deviations for both daily and hourly values.
-
-There are two pathways to evaluate the similarity of the measurements between the traps (measurers). One can either transform the measurements (log), so that they are normally distributed and then work with ANOVA, F-Test and Tukey Honestly Significance Difference (HSD); or one can take the measurements as is (counts per m³) and work with the non-parametric Kruskal-Vallis Test that only requires rank-symmetry but doesn't assume any underlying distribution of the data. For the non-parametric contrats multiple options present themselves that we will investigate below.
+We will first visually evaluate the similarity using Altman-Bland and Correlation Plots and then carry out some statistical tests.
+There are two pathways to evaluate the similarity of the measurements between the traps (measures). One can either transform the measurements (log), so that they are normally distributed and then work with ANOVA, F-Test and Tukey Honestly Significance Difference (HSD); or one can take the measurements as is (counts per m³) and work with the non-parametric Kruskal-Wallis Test that only requires rank-symmetry but doesn't assume any underlying distribution of the data. For the non-parametric contrasts multiple options present themselves that we will investigate below.
 
 ```{r}
 
@@ -464,8 +468,6 @@ data_transformed <- data_anova %>%
 #     Impute zero value with mean. - not evaluated
 #     Take square root instead of log for transformation - does not really help much
 
-  
-  
 ```
 
 
@@ -474,7 +476,19 @@ data_transformed <- data_anova %>%
 The correlation between the traps can be calculated easily and then the CI and p-values must be adjusted for multiple comparison.
 The corr-test function from the psych handily offers this functionality.
 
+Careful the correlation coefficients method have some serious shortcomings:
+
+The correlation coefficient measures linear agreement--whether the measurements go up-and-down together. Certainly, we want the measures to go up-and-down together, but the correlation coefficient itself is deficient in at least three ways as a measure of agreement. (http://www.jerrydallal.com/LHSP/compare.htm)
+
+- The correlation coefficient can be close to 1 (or equal to 1!) even when there is considerable bias between the two methods. For example, if one method gives measurements that are always 10 units higher than the other method, the correlation will be 1 exactly, but the measurements will always be 10 units apart.
+- The magnitude of the correlation coefficient is affected by the range of subjects/units studied. The correlation coefficient can be made smaller by measuring samples that are similar to each other and larger by measuring samples that are very different from each other. The magnitude of the correlation says nothing about the magnitude of the differences between the paired measurements which, when you get right down to it, is all that really matters.
+- The usual significance test involving a correlation coefficient-- whether the population value is 0--is irrelevant to the comparability problem. What is important is not merely that the correlation coefficient be different from 0. Rather, it should be close to (ideally, equal to) 1! 
+
 ### Pearson, Spearman and Kendall Correlation
+
+A good summary of the methods and their shortcomings can be found here: https://www.statisticssolutions.com/correlation-Pearson-Kendall-spear man/
+
+Generally the traps show a high level of correlation / association (well above 0.5). It looks like small concentrations lead to the largest discrepancies between the traps.
 
 ```{r}
 
@@ -540,57 +554,17 @@ ggarrange(gg1, gg2, gg3, ncol = 3) %>%
   annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 ```
 
+
+
 ### Altman-Bland Plots
 
-```{r}
+The well established AB-method for clinical trials can be used here as well to compare the means and differences between traps. Again we see that trap 8 generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence the traps can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
 
-data_altman <- data_anova %>% 
-  select(!!sym(species), trap, timestamp) %>% 
-    pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
-    setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
-    mutate(mean24 = if_else(!is.na(trap2) | !is.na(trap4),
-                          rowSums(.[2:3], na.rm = TRUE) / 2, 
-                          NA_real_),
-           mean28 = if_else(!is.na(trap2) | !is.na(trap8),
-                          rowSums(.[c(2, 4)], na.rm = TRUE) / 2, 
-                          NA_real_),
-           mean48 = if_else(!is.na(trap4) | !is.na(trap8),
-                          rowSums(.[3:4], na.rm = TRUE) / 2, 
-                          NA_real_),
-           diff24 = trap4 - trap2,
-           diff28 = trap8 - trap2,
-           diff48 = trap8 - trap4)
-
-gg_ab1 <- data_altman %>% 
-  ggplot(aes(x = mean24, y = diff24)) +
-  geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 2000), ylim = c(-500, 500)) +
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_smooth(alpha = 0.2)
-  
-gg_ab2 <- data_altman %>% 
-  ggplot(aes(x = mean28, y = diff28)) +
-  geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 2000), ylim = c(-500, 500)) +
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_smooth(alpha = 0.2)
-
-gg_ab3 <- data_altman %>% 
-  ggplot(aes(x = mean48, y = diff48)) +
-  geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 2000), ylim = c(-500, 500)) +
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_smooth(alpha = 0.2)
-
-ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3)
-
-```
-
-```{r}
+```{r fig.height=9}
 
 data_altman <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
-    pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
+    pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
     setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
     mutate(mean24 = if_else(!is.na(trap2) | !is.na(trap4),
                           rowSums(.[2:3], na.rm = TRUE) / 2, 
@@ -605,28 +579,47 @@ data_altman <- data_transformed %>%
            diff28 = trap8 - trap2,
            diff48 = trap8 - trap4)
 
+sd_diff <- data_altman %>% 
+  select(starts_with("diff")) %>% 
+  summarise_all(~sd(.)) %>% 
+  pivot_longer(1:3, values_to = "sd", names_to = "dummy") %>% 
+  pull(sd)
+
 gg_ab1 <- data_altman %>% 
   ggplot(aes(x = mean24, y = diff24)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-1, 1)) +  
+  coord_cartesian(xlim = c(3, 8), ylim = c(-2, 2)) +  
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_smooth(alpha = 0.2)
+  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_smooth(alpha = 0.2) +
+  labs(x = "Difference(trap4 - trap2)", y = "Mean(test4, test2)")
   
 gg_ab2 <- data_altman %>% 
   ggplot(aes(x = mean28, y = diff28)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-1, 1)) +  
+  coord_cartesian(xlim = c(3, 8), ylim = c(-2, 2)) +  
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_smooth(alpha = 0.2)
+  geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_smooth(alpha = 0.2) +
+  labs(x = "Difference(trap8 - trap2)", y = "Mean(test8, test2)")
 
 gg_ab3 <- data_altman %>% 
   ggplot(aes(x = mean48, y = diff48)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-1, 1)) +  
+  coord_cartesian(xlim = c(3, 8), ylim = c(-2, 2)) +  
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_smooth(alpha = 0.2)
+  geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_smooth(alpha = 0.2) +
+  labs(x = "Difference(trap8 - trap4)", y = "Mean(test8, test4)")
 
-ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3)
+title <- "Altman-Bland Plots for all Traps"
+
+ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = ggthemr::swatch()[1], face = "italic", size = 12))
+  
 
 ```
 
@@ -643,24 +636,23 @@ The first assumption is most crucial (but also most difficult to check). If the 
 violated, statistical inference can be very inaccurate. In the ANOVA setting, the last assumption is typically
 not as important compared to a regression setting, as we are typically fitting “large” models.
 
-Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmise the measured concentrations.
+Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmic the measured concentrations.
 
 ### F-Test / Omnibus-Test
 
 We first test for an overall significance of the trap on the measurements.
+F = variation between sample means / variation within the samples. I If the P-Value is larger than 5% we don't have to assume that the Null-Hypothesis (measurements from all traps originate from the same distribution).
+We use the settings that the coefficients for the three traps add to zero.
 
 ```{r}
 fit_anova <- aov(as.formula(paste(species, "~ trap")), data = data_transformed, contrasts = c("contr.sum", "contr.poly"))
-
 summary(fit_anova)
-confint(fit_anova)
-summary.lm(fit_anova)
 
 ```
 
 ### Residual Analysis
 
-As mentioned above (and already applied), the residuals of the anova fit need to fulfil some assumptions that we want to check in the following.
+As mentioned above (and already applied), the residuals of the anova fit need to fulfill some assumptions that we want to check in the following.
 
 - are the errors normally distributed?
 
@@ -668,7 +660,7 @@ In a QQ-plot we plot the empirical quantiles (“what we see in the data”) vs.
 we expect from the model”). The plot should show a more or less straight line if the distributional assumption
 is correct. By default, a standard normal distribution is the theoretical “reference distribution”.
 
-They are definitely not and we have to do some adjustments. So for the folowing plot we logarithmised the data to deal with the right-skewedness. The best results were achieved by first logarithmising the data and then taking the square root.
+They are definitely not and we have to do some adjustments. So for the following plot we logarithmic the data to deal with the right-skewedness. The best results were achieved by first logarithmic the data and then taking the square root.
 
 ```{r}
 fit_anova_raw <- aov(as.formula(paste(species, "~ trap")), data = data_anova, contrasts = c("contr.sum", "contr.poly"))
@@ -683,7 +675,8 @@ gg_res2 <- tibble(residuals = residuals(fit_anova, type = "pearson")) %>%
   stat_qq() +
   stat_qq_line()
 
-ggarrange(gg_res1, gg_res2, nrow = 1)
+ggarrange(gg_res1, gg_res2, nrow = 1) %>% 
+  annotate_figure(top = "QQ-Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
 
 ```
 
@@ -691,9 +684,7 @@ ggarrange(gg_res1, gg_res2, nrow = 1)
 - is the error variance constant?
 - do the errors have mean zero?
 
-The Tukey-Anscombe plot plots the residuals rij vs. the fitted values bμi. It allows us to check whether
-the residuals have constant variance and whether the residuals have mean zero (i.e. they don’t show any
-deterministic pattern). We don't plot the smoothing line as loess (and other) algorithms have issuess when the same value is repeated a large number of times (jitter did not really help).
+The Tukey-Anscombe plot plots the residuals vs. the fitted values. It allows us to check whether the residuals have constant variance and whether the residuals have mean zero (i.e. they don’t show any deterministic pattern). We don't plot the smoothing line as loess (and other) algorithms have issues when the same value is repeated a large number of times (jitter did not really help).
 
 ```{r}
 # plot(fit_anova, which = 1)
@@ -710,9 +701,11 @@ gg_tukey2 <-
     ggplot(aes(x = fitted, y = resid)) +
     geom_point(alpha = 0.5, position = position_jitter(width = 0.02, height = 0)) +
     # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-    geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])
+    geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])+
+  coord_cartesian(ylim = c(-3, 3))
 
-ggarrange(gg_tukey1, gg_tukey2)
+ggarrange(gg_tukey1, gg_tukey2)  %>% 
+  annotate_figure(top = "Tukey Anscombe - Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
 
 ```
 
@@ -722,7 +715,7 @@ ggarrange(gg_tukey1, gg_tukey2)
 If the data has some serial structure (i.e., if observations were recorded in a certain time order), we typically
 want to check whether residuals close in time are more similar than residuals far apart, as this would be a
 violation of the independence assumption. We can do so by using a so-called index plot where we plot the
-residuals against time. For positively dependendent residuals we would see time periods where most residuals
+residuals against time. For positively dependent residuals we would see time periods where most residuals
 have the same sign, while for negatively dependent residuals, the residuals would “jump” too often from
 positive to negative compared to independent residuals.
 
@@ -746,7 +739,8 @@ gg_timeline2 <- tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
   geom_point() +
   geom_line(alpha = 0.3)
 
-ggarrange(gg_timeline1, gg_timeline2, nrow = 2)
+ggarrange(gg_timeline1, gg_timeline2, nrow = 2) %>% 
+  annotate_figure(top = "Index-Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
 
 ```
 
@@ -760,6 +754,14 @@ between many (or all) treatments.
 Multiple Testing: The problem with all statistical tests is the fact that the (overall) error rate increases with increasing number
 of tests.
 
+Tukey's test compares the means of every treatment to the means of every other treatment; that is, it applies simultaneously to the set of all pairwise comparisons and identifies any difference between two means that is greater than the expected standard error. In other words, the Tukey method is conservative when there are unequal sample sizes. 
+Assumptions:
+- The observations being tested are independent within and among the groups.
+- The groups associated with each mean in the test are normally distributed.
+- There is equal within-group variance across the groups associated with each mean in the test (homogeneity of variance).
+
+https://en.Wikipedia.org/wiki/Tukey%27s_range_test
+
 ```{r}
 hsd <- TukeyHSD(fit_anova)
 plot(hsd)
@@ -767,32 +769,54 @@ plot(hsd)
 
 ### Random Effects Model
 
-So far we have been looking at three traps in isolation. But they are part of a larger "population" of Hirst traps being used at MCH or worldwide. Hence we also should look at ANOVA with trap as a random effect. This needs a bit more data per trap, otherwise the model fitting does not reach convergence and produce a so-called singular fit (i.e. daily averages don't work).
+So far we have been looking at three traps in isolation. But they are part of a larger "population" of Hirst traps being used at MCH or worldwide. Hence we also should look at ANOVA with trap as a random effect. This needs a bit more data per trap, otherwise the model fitting does not reach convergence and produce a so-called singular fit. Parameter estimation for the variance components is typically being done with a technique called restricted maximum likelihood (REML). We could also use “classical” maximum-likelihood estimators here, but REML estimates are less biased. The parameter is estimated with maximum-likelihood assuming that the variances are known.
+We want to compare the random effect variance for trap with the Residual variance here.
 
 ```{r}
 fit_lmer <- lmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
-isSingular(fit_lmer) # This has to be fixed!
+# isSingular(fit_lmer) # This has to be checked
 summary(fit_lmer)
 confint(fit_lmer, oldNames = FALSE)
-ranef(fit_lmer)
-confint(fit_anova)
+# ranef(fit_lmer)
+# confint(fit_anova) # For comparison
 ```
 
+So we can compare the estimated "explained variance" by trap of the total variance for both anova and lmer.
+
 ```{r}
-plot(fit_lmer, which = 1)
+summary_anova <- summary(fit_anova)
+summary_lmer <- summary(fit_lmer)
+
+explained_anova <- summary_anova[[1]][1, 2] / summary_anova[[1]][2, 2]
+p_anova <- summary_anova[[1]][1, 5]
+
+explained_lmer <- summary_lmer$varcor$trap[1, 1] / summary_lmer$sigma^2
+
+tibble("ANOVA" = explained_anova,
+       "LMER" = explained_lmer) %>% 
+  kable() %>%
+  kable_styling(full_width = FALSE)
+
 ```
+
+
+
+Checking the residuals again here:
 
 ```{r}
 par(mfrow = c(1, 2))
 qqnorm(ranef(fit_lmer)$trap[, "(Intercept)"], main = "Random effects")
 qqnorm(resid(fit_lmer), main = "Residuals")
+plot(fit_lmer)
 ```
 
 ## Non-Parametric / Rank-Based Symmetrical
 
-### Kruskal-Wallis Test
+### Kruskal-Wallis Test / Omnibus Test
 
 Kruskal-Wallis test by rank is a non-parametric alternative to one-way ANOVA test, which extends the two-samples Wilcoxon test in the situation where there are more than two groups. It’s recommended when the assumptions of one-way ANOVA test are not met. This tutorial describes how to compute Kruskal-Wallis test in R software. (http://www.sthda.com/english/wiki/kruskal-wallis-test-in-r)
+
+In this case the assumptions are sometimes not met for specific species specially when looking at shorter time windows.
 
 Assumptions
 
@@ -806,34 +830,62 @@ The assumptions of the Kruskal-Wallis test are similar to those for the Wilcoxon
 The test is generally considered to be robust to ties. However, if ties are present they should not be concentrated together in one part of the distribution (they should have either a normal or uniform distribution)
 https://influentialpoints.com/Training/kruskal-wallis_anova-principles-properties-assumptions.htm
 
-The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median. In other words, there should be roughly the same number of values above and below the median. This can be checked by visual inspection using histogram and density distribution.
+The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median. In other words, there should be roughly the same number of values above and below the median. This can be checked by visual inspection using histogram or density estimators
 
 ```{r}
-data_anova %>% 
+data_transformed %>% 
   ggplot(aes(x = !!sym(species))) +
-  geom_histogram(alpha = 0.7, bins = 100) +
-  geom_freqpoly(col = ggthemr::swatch()[3], bins = 50) +
+  geom_histogram(alpha = 0.7, bins = 50) +
+  # geom_freqpoly(col = ggthemr::swatch()[3], bins = 30) +
   # geom_density(col = ggthemr::swatch()[5]) +
-  geom_vline(xintercept = median(data_anova %>% pull(!!sym(species)), na.rm = TRUE), col = ggthemr::swatch()[4])
+  geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = ggthemr::swatch()[4]) +
+  ggtitle("Histogram of the Transformed Data With the Median (Red Line)")
 
 ```
 
 
 ```{r}
-kruskal.test(as.formula(paste(species, "~ trap")), data = data_anova)
+kruskal.test(as.formula(paste(species, "~ trap")), data = data_transformed)
 ```
 
-### Pairwise Wilcox, Dunn's test, the Conover-Iman test, and the Dwass-Steel-Crichtlow-Fligner
+### Dunn's test and the Conover-Iman test
+
+The Dunn and Conover Test are typically used as a follow up to the Omnibus test above. It is appropriate to use those test and not the pairwise Wilcoxon Tests for the following two reason: 
+
+- The rank sum test uses different ranks than those employed in the Kruskal-Wallis test (i.e. in both tests you mush the observations together, then rank them, then separate the ranks by group—the rank sum ignores the ranks you got with the omnibus test).
+- The rank sum test does not use the pooled variance implied by the null hypothesis in the Kruskal-Wallis test (e.g., just as in one-way ANOVA where the post hoc t tests use an estimate of the pooled variance).
+
+(https://stats.stackexchange.com/questions/71996/differences-between-dwass-steel-critchlow-fligner-and-mann-whitney-u-test-for-a)
+
+The output following the Kruskal-Wallis test provides all possible pairwise comparisons (six in the case of four groups). So the one on the first row compares group B with group A, the first on the second row compares group C with group A, etc.).
+
+The upper number for each comparison is Dunn's pairwise z test statistic. The lower number is in this example the raw p-value associated with the test.
+, although this p-value changes depending on the family-wise error rate or false discovery rate multiple comparisons adjustment option. For step wise multiple comparison adjustments (e.g. Holm, Benjamini-Hochberg, etc.), the adjusted p-values will have an asterisk next to them if your would reject the null hypotheses at the specified significance level (which is not necessarily directly indicated by the adjusted p-values since rejection depends on ordering... see the documentation and citations therein for more details.).
+https://stats.stackexchange.com/questions/126686/how-to-read-the-results-of-dunns-test
+
+The null hypothesis for each pairwise comparison is that the probability of observing a randomly selected value from the first group that is larger than a randomly selected value from the second group equals one half; this null hypothesis corresponds
+to that of the Wilcoxon-Mann-Whitney rank-sum test. Like the ranksum test, if the data can be assumed to be continuous, and the distributions are assumed identical except for a difference in location, Dunn's test may be understood as a test for median difference. 'dunn.test' accounts for tied ranks.
 
 ```{r}
 
-dunn.test::dunn.test(data_anova %>% pull(!!sym(species)),
-                     data_anova$trap,
+dunn.test::dunn.test(data_transformed %>% pull(!!sym(species)),
+                     data_transformed$trap,
+                     method = "holm") # Try different FEWR /FDR adjustments here
+
+conover.test::conover.test(data_transformed %>% pull(!!sym(species)),
+                     data_transformed$trap,
                      method = "holm")
 
-conover.test::conover.test(data_anova %>% pull(!!sym(species)),
-                     data_anova$trap,
-                     method = "holm")
+```
+
+For Donover the ECDF curves are not allow to cross each other. This is actually not given for quite a few species and averaging windows. Maybe it's safer to use Dunn's test (they were usually comparable in terms of the return P-value statistics).
+
+```{r}
+data_transformed %>% 
+  select(!!sym(species), trap) %>% 
+  ggplot(aes(x = !!sym(species), col = trap)) +
+  stat_ecdf(geom = "line", pad = FALSE) +
+  ggtitle("Empirical Cumulative Distribution Function for All Traps")
 
 ```
 
@@ -850,30 +902,29 @@ conover.test::conover.test(data_anova %>% pull(!!sym(species)),
 
 ### Random Effects Model
 
+When using classic estimation methods, even one such outlier might inflate the between-group variability estimate and distort the results (see example discussed in Section 4). In such a case it would be natural to assume that the group’s random effect (or mean) is an outlier rather than all observations are outliers in the same direction. This concept of allowing potential contamination on different sources of variability leads to the “random effects contamination model”. With this model, we make the assumption of long-tailed or “gross error” distributions for the random effects as well and not just for the random errors. The effect of the contamination is then propagated via the design matrices to the actual observations. Levels of random variability can be hierarchical or crossed, or both, depending on the grouping structure in the data. This implies that the effect of a single outlier on the random effects level is not always as straight forward as in the above mentioned one-way anova example. The effect may be different for each observation as the result of an outlier for a single observation is combined with all the other random effects that affect this observation. This complex relationship between the source of contamination and what is effectively realized in the data can make it very hard or even impossible to spot contamination. This is where robust methods step in and help clear the picture. Basing the robust estimator on the “random effects contamination model” allows not only multiple sources of contamination, it also avoids unnecessary assumptions about the data’s grouping structure. The only assumption on the grouping structure, that is also required for classic estimation, is that the model parameters are estimable. Other contamination models usually assume that contamination is introduced and dealt with at the lowest level only – the level of the observations. In mixed-effects models, observations generally correlate with one another, and robust methods must respect these correlations. These dependencies between observations require other contamination models to make strict assumptions about the grouping structure. The random effects contamination model assumes that contamination occurs directly at the source of random variability, before the grouping structure is introduced, thus circumventing the complexity introduced by the data structure and avoids unnecessary assumptions.
+
+Currently, there are two different methods available for fitting models. They only differ in how the consistency factors for the Design Adaptive Scale estimates are computed. Available fitting methods for theta and sigma. DAStau (default): For this method, the consistency factors are computed using numerical quadrature. This is slower but yields more accurate results. This is the direct analogue to the DAS-estimate in robust linear regression.
+
 ```{r}
 fit_rlmer <- rlmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
 summary(fit_rlmer)
 
-fit_rlmer2 <- update(fit_rlmer, rho.sigma.e = psi2propII(smoothPsi, k = 1.5), rho.sigma.b = psi2propII(smoothPsi, k = 1.5))
-
-compare(fit_lmer, fit_rlmer, fit_rlmer2, show.rho.functions = FALSE)
-
-gg <- map(1:3, ~plot(fit_rlmer, which = .x))
-
-
+# # The parameters can be tuned for a more efficient fit, I leave this to the interested reader: 
+# fit_rlmer2 <- update(fit_rlmer, rho.sigma.e = psi2propII(smoothPsi, k = 1.5), rho.sigma.b = psi2propII(smoothPsi, k = 1.5))
+# compare(fit_lmer, fit_rlmer, fit_rlmer2, show.rho.functions = FALSE)
+# gg <- map(1:3, ~plot(fit_rlmer, which = .x))
 
 ```
 
+# Measurement Spread and Error Distribution
 
+A second chapter of the paper should further elaborate on the relative errors between the traps.
+We are mostly interested to observe the difference of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
 
+In this first section we compare relative and absolute differences from the mean. Fitting parameters of a T-Distribution (distribution family visually chosen) using MLE (fitdistr / fit.st). The analysis is based on the transformed values, but the findings are usually independent of the log-transformation.
 
-
-# Error / Residual Analysis
-
-A second chapter of the paper should futher elaborate on the relative errors between the traps.
-We are mostly interested to observe the relative error of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
-
-```{r}
+```{r warning=FALSE}
 errors <- data_corr %>% 
   mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
                           rowSums(.[2:4], na.rm = TRUE) / 3, 
@@ -886,7 +937,7 @@ errors <- data_corr %>%
 sd(errors$error, na.rm = TRUE)
 sd(errors$error_rel, na.rm = TRUE)
 
-x <- seq(-2.5, 2.5, length.out = 2000)
+x <- seq(-2.5, 2.5, length.out = 10000)
 t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
 
 m <- t_shape$estimate[1]
@@ -918,7 +969,7 @@ gg_t_rel <- errors %>%
 
 ggarrange(gg_t_abs, gg_t_rel, nrow = 2) %>% 
   annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
-                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator and a Student-t distribution. \n At the bottom the relative differences from the mean.", color = ggthemr::swatch()[1], face = "italic", size = 10))
+                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n At the bottom the relative differences from the mean.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 
 ```
 
@@ -927,29 +978,38 @@ ggarrange(gg_t_abs, gg_t_rel, nrow = 2) %>%
 sample <- tibble(x = (x-m)/s, y = pt((x-m)/s, df = df))
 sample_rel <- tibble(x = (x-m_rel)/s_rel, y = pt((x-m_rel)/s_rel, df = df))
 
-errors %>% 
+gg_cdf1 <- errors %>% 
   ggplot(aes(x = error)) +
   stat_ecdf(geom = "step", pad = FALSE) +
-  coord_cartesian(xlim = c(-5, 5)) +
+  coord_cartesian(xlim = c(-2.5, 2.5)) +
   geom_line(data = sample, aes(x = x, y = y))
 
-errors %>% 
+gg_cdf2 <- errors %>% 
   ggplot(aes(x = error_rel)) +
   stat_ecdf(geom = "step", pad = FALSE) +
-  coord_cartesian(xlim = c(-5, 5)) +
+  coord_cartesian(xlim = c(-0.5, 0.5)) +
   geom_line(data = sample_rel, aes(x = x, y = y))
 
-
+ggarrange(gg_cdf1, gg_cdf2, nrow = 1) %>%
+  annotate_figure(top = "Comparison of Empirical and Fitted CDF for Absolute (Left) and Relative Differences")
 ```
-
+  
+Now we can investigate the goodness of the fit of the selected t-Distribution above.
+Graphically the QQ-Plot versus a t-distribution allows us to check whether the choice of distribution-family was sensible.
 
 ```{r}
 errors %>% 
   mutate(error_scaled = (error)) %>%
   ggplot(aes(sample = error_scaled)) +
   stat_qq(distribution = qt, dparams = as.list(df)) +
-  stat_qq_line(distribution = qt, dparams = as.list(df))
+  stat_qq_line(distribution = qt, dparams = as.list(df)) +
+  ggtitle("QQ-Plot to Compare Empirical Quantiles with Theoretical Ones from a t-Distribution")
 ```
+
+Then we can carry out two statistical tests that measure the goodness-of-fit.
+Parameters have been estimated from data, so the tests in the following need to account for that (e.g. no KS-tests).
+
+The Anderson–Darling and Cramér–von Mises statistics belong to the class of quadratic EDF statistics (tests based on the empirical distribution function. The Anderson–Darling test assesses whether a sample comes from a specified distribution. It makes use of the fact that, when given a hypothesized underlying distribution and assuming the data does arise from this distribution, the cumulative distribution function (CDF) of the data can be assumed to follow a uniform distribution. The data can be then tested for uniformity with a distance test (Shapiro 1980). [Wikipedia]
 
 ```{r}
 cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
@@ -960,10 +1020,9 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ```
 
-
 ## For Different Pollen Concentration Groups
 
-```{r}
+```{r fig.height=9}
 # set.seed(123)
 gg <- list()
 cvm <- numeric()
@@ -1010,14 +1069,15 @@ for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300
     ggplot(aes(x=error, y = ..density..)) +
     geom_histogram(bins= 100) +
     geom_density(col = ggthemr::swatch()[4]) +
-    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5])
+    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+    coord_cartesian(xlim = c(-2.5, 2.5)) +
+    labs(x = paste("Error", j))
   
   if (class(t_shape) != "try-error"){
     gg[[j]] <- gg[[j]] +
     geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
-    coord_cartesian(xlim = c(-2.5, 2.5)) +
-    geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 1)) +
-    geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 2, y = 1))
+    geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 1), size = 3) +
+    geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 2, y = 1), size = 3)
   }
     
 }
@@ -1032,22 +1092,26 @@ ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol =
 
 A short review of the methods applied in the draft paper so far. I would like to lay out why the methods used above are probably a preferred choice to compare the traps.
 
+## Correlation vs. Altman-Bland
+
+The Correlation coefficient r is not a reliable metric to compare measurers! see above
+
+## Paired vs. Unpaired
+
+I am pretty sure that paired tests should only be applied if the measurements come from the same trap (i.e. between lines). This is not the case for the trap comparison though!
+Paired t-test compares study subjects at 2 different times (paired observations of the same subject). Unpaired t-test (aka Student’s test) compares two different subjects. The paired t-test reduces intersubject variability (because it makes comparisons between the same subject), and thus is theoretically more powerful than the unpaired t-test.
+
 ## Pairwise vs. Contrasts
 
-Problem of multiple testing
+Problem of multiple testing and adjustments of P-Value, the chances of making type one error (reject H0 although true) is actually higher then the alpha chosen.
 
 ## Non-parametric vs. parametric
 
-Assumption of linearity is harder to achieve without adding much benefit (wilcox vs. t-test)
+Assumption of linearity is harder to achieve without adding much benefit (Wilcox vs. t-test for simple tests.). It probably makes sense to test apply some robust test in addition to the standard anova t-test that rely on normal distributions.
 
 ## linear regression vs. ordinary least products regression analysis 
 
-Geometric mean regression, reduced major axis regression take into account that both y and x contain measurement errors.
-If measurements have been made on a continuous scale, the main choice is between the Altman–Bland method of differ-
-ences and least products regression analysis. It is argued that although the former is relatively simple to execute, it does not
-distinguish adequately between fixed and proportional bias. Least products regression analysis, although more difficult to
-execute, does achieve this goal. There is almost universal agreement among biostatisticians that the Pearson product–moment
-correlation coefficient (r) is valueless as a test for bias.
+Geometric mean regression, reduced major axis regression take into account that both y and x contain measurement errors. If measurements have been made on a continuous scale, the main choice is between the Altman–Bland method of differences and least products regression analysis. It is argued that although the former is relatively simple to execute, it does not distinguish adequately between fixed and proportional bias. Least products regression analysis, although more difficult to execute, does achieve this goal. There is almost universal agreement among bio-statisticians that the Pearson product–moment correlation coefficient (r) is valueless as a test for bias.
 http://www.jerrydallal.com/LHSP/compare.htm
 
 

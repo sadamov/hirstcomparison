@@ -20,6 +20,17 @@ Imports:
     here,
     Amelia,
     knitr,
-    rmarkdown
+    rmarkdown,
+    caTools,
+    MASS,
+    lme4,
+    psych,
+    robustlmm,
+    goftest,
+    kableExtra,
+    Amelia,
+    data.table,
+    dunn.test,
+    conover.test
 VignetteBuilder: knitr
 RoxygenNote: 7.1.0
