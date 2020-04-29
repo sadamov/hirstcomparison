@@ -14,8 +14,8 @@ output:
 ```{r}
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
 
-species <- "Total"
-resolution <- "daily"
+species <- "Poaceae"
+resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 
 ```
 
@@ -527,7 +527,7 @@ ci <- map(corr_matrix, ~.x %>%
 gg1 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap4)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.2) +
+  geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
   geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
@@ -535,7 +535,7 @@ gg1 <- data_corr %>%
 gg2 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap8)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.2) +
+  geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
   geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
@@ -543,7 +543,7 @@ gg2 <- data_corr %>%
 gg3 <- data_corr %>% 
   ggplot(aes(x = trap4, y = trap8)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.2) +
+  geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
   geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
@@ -581,44 +581,44 @@ data_altman <- data_transformed %>%
 
 sd_diff <- data_altman %>% 
   select(starts_with("diff")) %>% 
-  summarise_all(~sd(.)) %>% 
+  summarise_all(~sd(., na.rm = TRUE)) %>% 
   pivot_longer(1:3, values_to = "sd", names_to = "dummy") %>% 
   pull(sd)
 
 gg_ab1 <- data_altman %>% 
   ggplot(aes(x = mean24, y = diff24)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-2, 2)) +  
+  coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[1] * 3, sd_diff[1] * 3)) +  
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_smooth(alpha = 0.2) +
-  labs(x = "Difference(trap4 - trap2)", y = "Mean(test4, test2)")
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(trap4 - trap2)", x = "Mean(trap4, trap2)")
   
 gg_ab2 <- data_altman %>% 
   ggplot(aes(x = mean28, y = diff28)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-2, 2)) +  
+  coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[2] * 3, sd_diff[2] * 3)) +  
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_smooth(alpha = 0.2) +
-  labs(x = "Difference(trap8 - trap2)", y = "Mean(test8, test2)")
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(trap8 - trap2)", x = "Mean(trap8, trap2)")
 
 gg_ab3 <- data_altman %>% 
   ggplot(aes(x = mean48, y = diff48)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-2, 2)) +  
+  coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[3] * 3, sd_diff[3] * 3)) +  
   geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_smooth(alpha = 0.2) +
-  labs(x = "Difference(trap8 - trap4)", y = "Mean(test8, test4)")
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(trap8 - trap4)", x = "Mean(trap8, trap4)")
 
 title <- "Altman-Bland Plots for all Traps"
 
 ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = ggthemr::swatch()[1], face = "italic", size = 12))
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = ggthemr::swatch()[1], face = "italic", size = 12))
   
 
 ```
@@ -1022,7 +1022,7 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ## For Different Pollen Concentration Groups
 
-```{r fig.height=9}
+```{r fig.height=9, eval = FALSE}
 # set.seed(123)
 gg <- list()
 cvm <- numeric()
@@ -1083,7 +1083,9 @@ for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300
 }
 
 
-ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2)
+ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = "Absolute Differences from the Average Measurements of the Three Traps for Different Groups",
+                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = ggthemr::swatch()[1], face = "italic", size = 10))
 
 ```
 
