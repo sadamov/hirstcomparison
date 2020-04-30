@@ -166,6 +166,24 @@ If these values are outside of the blooming season then we don't have an issue. 
 
 ```{r}
 
+# Locate Missing Data (to present to Fiona)
+
+missing <- data_raw %>% 
+  bind_rows %>% 
+  filter_all(any_vars(is.na(.))) %>% 
+  select(datetime, date, hour, trap, line) 
+
+missing %>% 
+  write.csv(file = "missing.csv")
+
+missing %>% 
+  group_by(trap, line, date) %>% 
+  summarise() %>% 
+  ungroup() %>% 
+  mutate(dummy = date) %>% 
+  pivot_wider(values_from = date, names_from = c(trap, line)) %>% 
+  write.csv("overview.csv")
+
 # map2(data, names(data), ~Amelia::missmap(as.data.frame(.x), y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = paste("Missingnes Map for", .y)))
 data_raw[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
 
@@ -334,21 +352,21 @@ These metrics are well-known and usually part of a Pollen Measurement study. It 
 ```{r}
 data_hourly_raw <- map(data_raw, ~.x %>% 
   group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_daily_raw <- map(data_hourly_raw, ~.x %>% 
                     group_by(date, trap, line) %>% 
-                    summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+                    summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
                     ungroup())
 
 occurence_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(. !=0, na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~sum(. !=0, na.rm = TRUE)) %>% 
   ungroup() 
 
 names <- names(occurence_raw)
@@ -363,7 +381,7 @@ occurence_raw <- occurence_raw %>%
 maximum_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~max(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -374,7 +392,7 @@ maximum_raw <- data_daily_raw %>%
 average_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -385,10 +403,10 @@ average_raw <- data_daily_raw %>%
 spi_raw <- data_daily_raw %>% # Seasonal Pollen Integral
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 

@@ -4,3 +4,6 @@ frage_regula.Rmd
 test.Rmd
 hirstcomparison.log
 hirstcomparison_files
+*.tmp
+*.csv
+*.xlsx
