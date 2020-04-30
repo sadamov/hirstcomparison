@@ -14,8 +14,8 @@ output:
 ```{r}
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
 
-species <- "Poaceae"
-resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+species <- "Total"
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 
 ```
 
@@ -166,54 +166,91 @@ If these values are outside of the blooming season then we don't have an issue. 
 
 ```{r}
 
-# Locate Missing Data (to present to Fiona)
-
-missing <- data_raw %>% 
-  bind_rows %>% 
-  filter_all(any_vars(is.na(.))) %>% 
-  select(datetime, date, hour, trap, line) 
-
-missing %>% 
-  write.csv(file = "missing.csv")
-
-missing %>% 
-  group_by(trap, line, date) %>% 
-  summarise() %>% 
-  ungroup() %>% 
-  mutate(dummy = date) %>% 
-  pivot_wider(values_from = date, names_from = c(trap, line)) %>% 
-  write.csv("overview.csv")
+# # Locate Missing Data (to present to Fiona)
+# 
+# missing <- data_raw %>% 
+#   bind_rows %>% 
+#   filter_all(any_vars(is.na(.))) %>% 
+#   select(datetime, date, hour, trap, line) 
+# 
+# missing %>% 
+#   write.csv(file = "missing.csv")
+# 
+# missing %>% 
+#   group_by(trap, line, date) %>% 
+#   summarise() %>% 
+#   ungroup() %>% 
+#   mutate(dummy = date) %>% 
+#   pivot_wider(values_from = date, names_from = c(trap, line)) %>% 
+#   write.csv("overview.csv")
 
 # map2(data, names(data), ~Amelia::missmap(as.data.frame(.x), y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = paste("Missingnes Map for", .y)))
 data_raw[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
 
 ```
 
-For now we leave these measurements as NA and will not plot them or impute values for statistical analyses.
-
-We will exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison). This is of course a deliberate choice, it was not the goal of the study to see how often all traps measured zero pollen. Everything strongly depends on this decision and the data preparation should be adjusted if other statistical questions are being evaluated.
+For now we leave these measurements as NA and will not plot them nor impute values for statistical analyses.
 
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
 # It's probably better to work with full days only, so that each measurement independet of the aggregation window has the same meaning
 data_raw <- map(data_raw, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:00:00"),
                                  datetime >= as_datetime("2013-04-02 00:10:00"))) 
+```
 
-# We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season).
-# We could exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. But this can be achieved ba looking at the different concentration groups. To be discussed whether the total should not contain <10 Pollen/m³ concentrations.
-data <- data_raw %>% 
-  bind_rows %>%   
-  group_by(datetime) %>% 
-  mutate_at(vars(all_of(species_selection)), function(x){
-      if(sum(x, na.rm = TRUE) > 0) 
-        return(x)
-      else 
-        return(NA_real_)
-  }) %>% 
-  ungroup %>% 
+
+```{r}
+# How often is it actually the case that only a part of the three traps measured pollen at any given time:
+# First we need to make sure that all measurements are exactly registered at 10, 20, 30, 40, 50, 0 minutes after the hour.
+
+data_raw <- map(data_raw, ~.x %>% 
+  mutate(datetime = if_else(minute(datetime) %% 10 != 0, datetime + minutes(1), datetime)))
+  
+# minute(data_raw %>% bind_rows() %>% pull(datetime)) %>% unique() # It's always plus one to fix it if necessary at all.
+
+```
+
+We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison). This is of course a deliberate choice, it was not the goal of the study to see how often all traps measured zero pollen. Everything strongly depends on this decision and the data preparation should be adjusted if other statistical questions are being evaluated.
+We might be switching up the data prep after the first meeting to make the data more consistent and the resulting residuals from the model fit easier to work with. So instead of setting value to NA when all traps are zero for any given time, we will set value to zero if at least ONE trap is zero at a given time. This has a potentially large effect on the analysis and should be reevaluated if the code is used for other problems again in the future. TBD!
+
+```{r}
+
+# data <- data_raw %>%
+#   bind_rows %>%
+#   group_by(datetime) %>%
+#   mutate_at(vars(all_of(species_selection)), function(x){
+#       if(sum(x, na.rm = TRUE) > 0)
+#         return(x)
+#       else
+#         return(NA_real_)
+#   }) %>%
+#   ungroup %>%
+#   group_split(trap,line)
+
+measurements_to_exclude <- data_raw %>%
+  bind_rows %>%
+  group_by(trap, datetime) %>%
+  replace(is.na(.), 0) %>%
+  mutate_at(vars(all_of(species_selection)), .funs = list(exclude = ~mean(.))) %>%
+  ungroup() %>%
+  group_by(datetime) %>%
+  mutate_at(vars(all_of(paste0(species_selection, "_exclude"))), function(x){
+      if(all(as.integer(x) == 0))
+        return(NA) # This will set all measurements to NA if one of the traps did not measure any pollen
+      else
+        return(0)
+  }) %>%
+  ungroup()
+
+
+measurements_after_exclusion <- map2_df(data_raw %>% bind_rows %>% select(species_selection), measurements_to_exclude %>% select(contains("exclude")), ~.x + as.integer(.y))
+
+data <- measurements_after_exclusion %>%
+  bind_cols(measurements_to_exclude %>%
+              select(datetime, date, hour, trap, line)) %>%
   group_split(trap,line)
 
-data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
 
 ```
 
@@ -222,6 +259,10 @@ data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col =
 ### By Species
 
 Five concentration classes were defined for the analysis: 0-10 pollen grains/m3, 10-20 pollen grains/m3, 20-50 pollen grains/m3, 50-100 pollen grains/m3, 100-300 grains/m3, and >300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error.
+
+TODO!
+
+In The following five groups were defined based on the Pollen-Grain sizes.
 
 - Group 1: Urtica, Castanea
 - Group 2: Alnus, Betula, Corylus, Fraxinus, Platanus, Rumex, Salix
@@ -343,23 +384,55 @@ data_daily <- map(data_hourly, ~.x %>%
 
 ```
 
+### Assess the Effect of Setting many Measurements to NA
+
+```{r}
+data_hourly_raw <- map(data_raw, ~.x %>%
+  group_by(date, hour, trap, line) %>%
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>%
+  ungroup())
+
+data_daily_raw <- map(data_hourly_raw, ~.x %>%
+                    group_by(date, trap, line) %>%
+                    summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>%
+                    ungroup())
+
+
+number_of_measurements <- data_hourly %>% 
+  bind_rows %>%   
+  group_by(trap, date, hour) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  replace(is.na(.), 0) %>% 
+  mutate_at(vars(all_of(species_selection)), funs(as.integer(as.integer(.) != 0))) %>% 
+  ungroup %>% 
+  group_by(date, hour) %>%
+  summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
+  ungroup 
+
+bind_rows(number_of_measurements %>% 
+    summarise_at(vars(all_of(species_selection)), ~sum(. == 3)),  
+  number_of_measurements %>% 
+    summarise_at(vars(all_of(species_selection)), ~sum(. == 2)),
+  number_of_measurements %>% 
+    summarise_at(vars(all_of(species_selection)), ~sum(. == 1)),
+  number_of_measurements %>% 
+  summarise_at(vars(all_of(species_selection)), ~sum(. == 0))) %>% 
+  mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured", "None measured")) %>% select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus) %>% 
+  kable() %>% 
+  kable_styling()
+
+
+```
+
 # Tabular Comparison of Various Metrics
+
+In the following when we look at measurements from traps, we simply average between the four counted lines.
 
 Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998).
 
 These metrics are well-known and usually part of a Pollen Measurement study. It is common to calculate the means before setting values outside the blooming season to NA. Hence I created a data_raw list of tibbles above just for that purpose.
 
 ```{r}
-data_hourly_raw <- map(data_raw, ~.x %>% 
-  group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
-  ungroup())
-
-data_daily_raw <- map(data_hourly_raw, ~.x %>% 
-                    group_by(date, trap, line) %>% 
-                    summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
-                    ungroup())
-
 occurence_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
@@ -380,6 +453,9 @@ occurence_raw <- occurence_raw %>%
 
 maximum_raw <- data_daily_raw %>% 
   bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
   group_by(trap) %>% 
   summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
   ungroup()%>% 
@@ -391,6 +467,9 @@ maximum_raw <- data_daily_raw %>%
 
 average_raw <- data_daily_raw %>% 
   bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
   group_by(trap) %>% 
   summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
   ungroup()%>% 
