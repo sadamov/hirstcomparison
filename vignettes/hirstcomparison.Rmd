@@ -126,10 +126,10 @@ dates <- map(dates_raw, ~mutate(
 
 # Combining the measurements with the datetimes for the three traps
 # It appears that the traps have slightly different observations (e.g. 9 minutes past the full hour instead of 10). This will have no impact, once the concentrations are averaged per hour
-data <- map2(data_raw, rep(1:3, each = 4), ~bind_cols(.x, dates[[.y]]) %>% mutate(trap = 2^(.y)))
+data_raw <- map2(data_raw, rep(1:3, each = 4), ~bind_cols(.x, dates[[.y]]) %>% mutate(trap = 2^(.y)))
 
 # Create a new variable to differentiate between counted lines; note that traps were already defined in the previous map-call above
-data <- map2(data, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = .y))
+data_raw <- map2(data_raw, rep(c(2, 4, 6, 7), 3), ~mutate(.x, line = .y))
 
 # We are only interested on a subset of the data. The other species either have very low measurements in Switzerland, or they are not relevant from a medical point of view. This selection has been discussed with Regula Gehrig and has been used for a longer time now at MCH.
 # The order of variables is different in the PAY2 and PAY6 data, hence we quicly sort them here:
@@ -137,7 +137,7 @@ species_selection <- c("Castanea", "Alnus", "Ulmus", "Cupressus", "Fraxinus", "F
     "Pinus", "Quercus", "Rumex", "Platanus", "Populus", "Poaceae", "Salix", "Betula", "Carpinus", 
     "Urtica", "Taxus", "Picea")
 
-data <- map(data, ~select(.x, 
+data_raw <- map(data_raw, ~select(.x, 
     kacastz0, kaalnuz0, kaulmuz0, kacuprz0, kafraxz0, kafaguz0, kajuglz0, khplanz0, kacoryz0, 
     kapinuz0, kaquerz0, khrumez0, kaplatz0, kapopuz0, khpoacz0, kasaliz0, kabetuz0, kacarpz0, 
     khurtiz0, kataxuz0, kapicez0, datetime, date, hour, trap, line) %>% 
@@ -150,7 +150,7 @@ data <- map(data, ~select(.x,
 The team in Payerne found that the air sucking rates of the Hirst traps are actually higher in reality than reported by the manufacturer. The traps suck in 13.5 l per minute instead of 10 l per minute. Hence our Pollen counts per 10 minutes are too high and should be reduced by a factor of 1.35.
 
 ```{r}
-data <- map(data, ~mutate_at(.x, vars(all_of(species_selection)), ~./1.35))
+data_raw <- map(data_raw, ~mutate_at(.x, vars(all_of(species_selection)), ~./1.35))
 ```
 
 
@@ -167,7 +167,7 @@ If these values are outside of the blooming season then we don't have an issue. 
 ```{r}
 
 # map2(data, names(data), ~Amelia::missmap(as.data.frame(.x), y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = paste("Missingnes Map for", .y)))
-data[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
+data_raw[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
 
 ```
 
@@ -178,12 +178,12 @@ We will exclude all observations where the measurement of all lines and traps is
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
 # It's probably better to work with full days only, so that each measurement independet of the aggregation window has the same meaning
-data <- map(data, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:00:00"),
+data_raw <- map(data_raw, ~.x %>% filter(datetime <= as_datetime("2013-06-30 00:00:00"),
                                  datetime >= as_datetime("2013-04-02 00:10:00"))) 
 
 # We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season).
 # We could exclude all observations where the measurement of all lines and traps is lower than 10 Pollen/m^3, as discussed with Regula Gehrig. But this can be achieved ba looking at the different concentration groups. To be discussed whether the total should not contain <10 Pollen/m³ concentrations.
-data <- data %>% 
+data <- data_raw %>% 
   bind_rows %>%   
   group_by(datetime) %>% 
   mutate_at(vars(all_of(species_selection)), function(x){
@@ -327,11 +327,22 @@ data_daily <- map(data_hourly, ~.x %>%
 
 # Tabular Comparison of Various Metrics
 
-Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998). 
+Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998).
+
+These metrics are well-known and usually part of a Pollen Measurement study. It is common to calculate the means before setting values outside the blooming season to NA. Hence I created a data_raw list of tibbles above just for that purpose.
 
 ```{r}
+data_hourly_raw <- map(data_raw, ~.x %>% 
+  group_by(date, hour, trap, line) %>% 
+  summarise_at(vars(all_of(species_selection), ~mean(., na.rm = TRUE)) %>% 
+  ungroup())
 
-occurence <- data_daily %>% 
+data_daily_raw <- map(data_hourly_raw, ~.x %>% 
+                    group_by(date, trap, line) %>% 
+                    summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+                    ungroup())
+
+occurence_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(., na.rm = TRUE)) %>% 
@@ -340,16 +351,16 @@ occurence <- data_daily %>%
   summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~sum(. !=0, na.rm = TRUE)) %>% 
   ungroup() 
 
-names <- names(occurence)
+names <- names(occurence_raw)
 
-occurence <- occurence %>% 
+occurence_raw <- occurence_raw %>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
   mutate(name = names) %>% 
   select(name, trap2, trap4, trap8) %>% 
   filter(name != "trap")
 
-maximum <- data_daily %>% 
+maximum_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(trap) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~max(., na.rm = TRUE)) %>% 
@@ -360,7 +371,7 @@ maximum <- data_daily %>%
   filter(name != "trap") %>% 
   mutate_at(vars(starts_with("trap")), round)
 
-average <- data_daily %>% 
+average_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(trap) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
@@ -371,7 +382,7 @@ average <- data_daily %>%
   filter(name != "trap") %>% 
   mutate_at(vars(starts_with("trap")), round)
 
-spi <- data_daily %>% # Seasonal Pollen Integral
+spi_raw <- data_daily_raw %>% # Seasonal Pollen Integral
   bind_rows %>% 
   group_by(date, trap) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
@@ -386,10 +397,10 @@ spi <- data_daily %>% # Seasonal Pollen Integral
   mutate_at(vars(starts_with("trap")), round)
 
 
-occurence %>% 
-  inner_join(maximum, by = "name") %>% 
-  inner_join(average, by = "name") %>% 
-  inner_join(spi, by = "name") %>% 
+occurence_raw %>% 
+  inner_join(maximum_raw, by = "name") %>% 
+  inner_join(average_raw, by = "name") %>% 
+  inner_join(spi_raw, by = "name") %>% 
   filter(name %in% species_selection) %>% 
   arrange(desc(trap8.y.y)) %>% 
   setNames(c("Name", rep(paste0("trap", c(2, 4, 8)), times = 4))) %>% 
