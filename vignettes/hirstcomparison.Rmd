@@ -118,6 +118,7 @@ dates <- map(dates_raw, ~mutate(
   .x,
   time = sprintf("%04d", as.integer(X2)), # otherwise we lose leading zeros
   datetime = ymd_hm(paste0(X1, time)),
+  datetime = datetime - hours(2), # Convert from CEST to UTC
   datetime_adj = datetime - minutes(10), # This is necessary to cope with the guidelines about hourly averages mentioned below
   hour = hour(datetime_adj) + 1,
   date = date(datetime_adj)) %>% 
