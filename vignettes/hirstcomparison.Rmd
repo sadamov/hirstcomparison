@@ -259,10 +259,6 @@ data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col 
 
 ### By Species
 
-Five concentration classes were defined for the analysis: 0-10 pollen grains/m3, 10-20 pollen grains/m3, 20-50 pollen grains/m3, 50-100 pollen grains/m3, 100-300 grains/m3, and >300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error.
-
-TODO!
-
 In The following five groups were defined based on the Pollen-Grain sizes.
 
 - Group 1: Urtica, Castanea
@@ -273,34 +269,36 @@ In The following five groups were defined based on the Pollen-Grain sizes.
 
 ```{r}
 
-Group10_20 <- c("Urtica", "Castanea")
-Group20_50 <- c("Alnus", "Betula", "Corylus", "Fraxinus", "Platanus", "Rumex", "Salix")
-Group50_100 <- c("Plantago", "Poaceae", "Populus", "Taxus", "Cupressus", "Ulmus")
-Group100_300 <- c("Carpinus", "Fagus", "Juglans", "Quercus")
-Group300 <- c("Pinus", "Picea")
+Group1 <- c("Urtica", "Castanea")
+Group2 <- c("Alnus", "Betula", "Corylus", "Fraxinus", "Platanus", "Rumex", "Salix")
+Group3 <- c("Plantago", "Poaceae", "Populus", "Taxus", "Cupressus", "Ulmus")
+Group4 <- c("Carpinus", "Fagus", "Juglans", "Quercus")
+Group5 <- c("Pinus", "Picea")
 
 data <- map(data, ~.x %>% 
-  mutate(Group10_20 = if_else(!is.na(Urtica) | !is.na(Castanea), 
-                              rowSums(.[names(.x) %in% Group10_20], na.rm = TRUE), 
+  mutate(Group1 = if_else(!is.na(Urtica) | !is.na(Castanea), 
+                              rowSums(.[names(.x) %in% Group1], na.rm = TRUE), 
                               NA_real_),
-         Group20_50 = if_else(!is.na(Alnus) | !is.na(Betula) | !is.na(Corylus) | !is.na(Fraxinus) | !is.na(Platanus) | !is.na(Rumex) | !is.na(Salix), 
-                              rowSums(.[names(.x) %in% Group20_50], na.rm = TRUE), 
+         Group2 = if_else(!is.na(Alnus) | !is.na(Betula) | !is.na(Corylus) | !is.na(Fraxinus) | !is.na(Platanus) | !is.na(Rumex) | !is.na(Salix), 
+                              rowSums(.[names(.x) %in% Group2], na.rm = TRUE), 
                               NA_real_),
-         Group50_100 = if_else(!is.na(Plantago) | !is.na(Poaceae) | !is.na(Populus) | !is.na(Taxus) | !is.na(Cupressus) | !is.na(Ulmus), 
-                               rowSums(.[names(.x) %in% Group50_100], na.rm = TRUE), 
+         Group3 = if_else(!is.na(Plantago) | !is.na(Poaceae) | !is.na(Populus) | !is.na(Taxus) | !is.na(Cupressus) | !is.na(Ulmus), 
+                               rowSums(.[names(.x) %in% Group3], na.rm = TRUE), 
                                NA_real_),
-         Group100_300 = if_else(!is.na(Carpinus) | !is.na(Fagus) | !is.na(Juglans) | !is.na(Quercus), 
-                                rowSums(.[names(.x) %in% Group100_300], na.rm = TRUE), 
+         Group4 = if_else(!is.na(Carpinus) | !is.na(Fagus) | !is.na(Juglans) | !is.na(Quercus), 
+                                rowSums(.[names(.x) %in% Group4], na.rm = TRUE), 
                                 NA_real_),
-         Group300 = if_else(!is.na(Pinus) | !is.na(Picea),
-                                rowSums(.[names(.x) %in% Group300], na.rm = TRUE), 
+         Group5 = if_else(!is.na(Pinus) | !is.na(Picea),
+                                rowSums(.[names(.x) %in% Group5], na.rm = TRUE), 
                                 NA_real_),
-         Total = if_else(!is.na(Group10_20) | !is.na(Group20_50) | !is.na(Group50_100) | !is.na(Group100_300) | !is.na(Group300), 
+         Total = if_else(!is.na(Group1) | !is.na(Group2) | !is.na(Group3) | !is.na(Group4) | !is.na(Group5), 
                          rowSums(.[names(.x) %in% species_selection], na.rm = TRUE), 
                          NA_real_)))
 
 ```
 
+
+Five concentration classes could also be defined for the analysis: 0-10 pollen grains/m3, 10-20 pollen grains/m3, 20-50 pollen grains/m3, 50-100 pollen grains/m3, 100-300 grains/m3, and >300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error. This will be done on a ad-hoc basis when needed further below. The classes will depend on the average window.
 
 ### Temporal
 
@@ -323,7 +321,7 @@ Die Tageswerte werden bei den Pollen glaub ich aus den Stundenwerten berechnet a
 # Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
 data_hourly <- map(data, ~.x %>% 
   group_by(date, hour, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 
@@ -352,7 +350,7 @@ data_hours3 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours3, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours6 <- map(data, ~.x %>% 
@@ -364,7 +362,7 @@ data_hours6 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours6, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours12 <- map(data, ~.x %>% 
@@ -374,12 +372,12 @@ data_hours12 <- map(data, ~.x %>%
     )
   ) %>% 
   group_by(date, hours12, trap, line) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_daily <- map(data_hourly, ~.x %>% 
                     group_by(date, trap, line) %>% 
-                    summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+                    summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
                     ungroup())
 
 
@@ -565,11 +563,11 @@ data_anova <- data_anova %>%
   bind_rows() %>% 
   mutate(trap = as.factor(trap)) %>% 
   group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup 
 
 data_transformed <- data_anova %>% 
-  mutate_at(vars(all_of(species_selection), Total, Group10_20, Group20_50, Group50_100, Group100_300, Group300), ~log(. + 1))
+  mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~log(. + 1))
   
 # There are various methods to deal with zeros during log transformation
 # 
@@ -1129,7 +1127,7 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ```
 
-## For Different Pollen Concentration Groups
+## For Different Pollen Pollen Size Groups
 
 ```{r fig.height=9, eval = FALSE}
 # set.seed(123)
@@ -1137,7 +1135,7 @@ gg <- list()
 cvm <- numeric()
 ad <- numeric()
 
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300", "Total")){
+for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
   errors <- data_transformed %>% 
     select(!!sym(j), trap, timestamp) %>% 
     pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
