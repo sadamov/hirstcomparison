@@ -3,12 +3,12 @@ title: "Comparison of Pollen Traps"
 subtitle: "Evaluation of Similarity and Robustness of Three Hirst-type Pollen Traps Located in Payerne During the Blooming Season 2013"
 author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
+always_allow_html: TRUE
 output:
+  word_document: default
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
-  word_document: default
-
 ---
 
 ```{r}
@@ -20,7 +20,7 @@ resolution <- "daily" # What temporal resolution should be plotted c("daily", "1
 ```
 
 
-```{r setup, include=FALSE}
+```{r include=FALSE}
 knitr::opts_chunk$set(echo = FALSE,
                       error = FALSE, 
                       warning = FALSE, 
@@ -245,7 +245,7 @@ measurements_to_exclude <- data_raw %>%
   ungroup()
 
 
-measurements_after_exclusion <- map2_df(data_raw %>% bind_rows %>% select(species_selection), measurements_to_exclude %>% select(contains("exclude")), ~.x + as.integer(.y))
+measurements_after_exclusion <- map2_df(data_raw %>% bind_rows %>% select(all_of(species_selection)), measurements_to_exclude %>% select(contains("exclude")), ~.x + as.integer(.y))
 
 data <- measurements_after_exclusion %>%
   bind_cols(measurements_to_exclude %>%
