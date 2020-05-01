@@ -53,7 +53,8 @@ devtools::load_all()
 
 # I like the look of these plots
 # devtools::install_github('cttobin/ggthemr')
-ggthemr::ggthemr("fresh")
+# library(ggthemr)
+ggthemr("fresh")
 
 # caTools and bitops are required to knit this vignette, those are not tracked by renv and must be installed by the user
 # Due to old R-Version caTools must be installed from CRAN Archive, in order to knit markdown documents.
@@ -185,8 +186,8 @@ If these values are outside of the blooming season then we don't have an issue. 
 #   pivot_wider(values_from = date, names_from = c(trap, line)) %>% 
 #   write.csv("overview.csv")
 
-# map2(data, names(data), ~Amelia::missmap(as.data.frame(.x), y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = paste("Missingnes Map for", .y)))
-data_raw[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
+# map2(data, names(data), ~Amelia::missmap(as.data.frame(.x), y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = paste("Missingnes Map for", .y)))
+data_raw[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2")
 
 ```
 
@@ -251,7 +252,7 @@ data <- measurements_after_exclusion %>%
               select(datetime, date, hour, trap, line)) %>%
   group_split(trap,line)
 
-data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = ggthemr::swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
 
 ```
 
@@ -635,7 +636,7 @@ gg1 <- data_corr %>%
   ggplot(aes(x = trap2, y = trap4)) + 
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1) +
-  geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
+  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
@@ -643,7 +644,7 @@ gg2 <- data_corr %>%
   ggplot(aes(x = trap2, y = trap8)) + 
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1) +
-  geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
+  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
@@ -651,14 +652,14 @@ gg3 <- data_corr %>%
   ggplot(aes(x = trap4, y = trap8)) + 
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1) +
-  geom_abline(slope = 1, intercept = 0, col = ggthemr::swatch()[4]) +
+  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
 
 ggarrange(gg1, gg2, gg3, ncol = 3) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = ggthemr::swatch()[1], face = "italic", size = 10))
+  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
 ```
 
 
@@ -696,9 +697,9 @@ gg_ab1 <- data_altman %>%
   ggplot(aes(x = mean24, y = diff24)) +
   geom_point(alpha = 0.5) +
   coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[1] * 3, sd_diff[1] * 3)) +  
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_smooth(alpha = 0.1) +
   labs(y = "Difference(trap4 - trap2)", x = "Mean(trap4, trap2)")
   
@@ -706,9 +707,9 @@ gg_ab2 <- data_altman %>%
   ggplot(aes(x = mean28, y = diff28)) +
   geom_point(alpha = 0.5) +
   coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[2] * 3, sd_diff[2] * 3)) +  
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+  geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_smooth(alpha = 0.1) +
   labs(y = "Difference(trap8 - trap2)", x = "Mean(trap8, trap2)")
 
@@ -716,16 +717,16 @@ gg_ab3 <- data_altman %>%
   ggplot(aes(x = mean48, y = diff48)) +
   geom_point(alpha = 0.5) +
   coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[3] * 3, sd_diff[3] * 3)) +  
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = ggthemr::swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+  geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+  geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_smooth(alpha = 0.1) +
   labs(y = "Difference(trap8 - trap4)", x = "Mean(trap8, trap4)")
 
 title <- "Altman-Bland Plots for all Traps"
 
 ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = ggthemr::swatch()[1], face = "italic", size = 12))
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
   
 
 ```
@@ -799,16 +800,16 @@ The Tukey-Anscombe plot plots the residuals vs. the fitted values. It allows us 
 gg_tukey1 <- tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
   ggplot(aes(x = fitted, y = resid)) +
   geom_point(alpha = 0.5, position = position_jitter(width = 5, height = 0)) +
-  # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-  geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3]) +
+  # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+  geom_abline(slope = 0, intercept = 0, col = swatch()[3]) +
   coord_cartesian(ylim = c(-500, 500))
 
 gg_tukey2 <- 
   tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
     ggplot(aes(x = fitted, y = resid)) +
     geom_point(alpha = 0.5, position = position_jitter(width = 0.02, height = 0)) +
-    # geom_smooth(method = "loess", col = ggthemr::swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-    geom_abline(slope = 0, intercept = 0, col = ggthemr::swatch()[3])+
+    # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+    geom_abline(slope = 0, intercept = 0, col = swatch()[3])+
   coord_cartesian(ylim = c(-3, 3))
 
 ggarrange(gg_tukey1, gg_tukey2)  %>% 
@@ -943,9 +944,9 @@ The Wilcoxon signed-rank test assumes that the data are distributed symmetricall
 data_transformed %>% 
   ggplot(aes(x = !!sym(species))) +
   geom_histogram(alpha = 0.7, bins = 50) +
-  # geom_freqpoly(col = ggthemr::swatch()[3], bins = 30) +
-  # geom_density(col = ggthemr::swatch()[5]) +
-  geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = ggthemr::swatch()[4]) +
+  # geom_freqpoly(col = swatch()[3], bins = 30) +
+  # geom_density(col = swatch()[5]) +
+  geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = swatch()[4]) +
   ggtitle("Histogram of the Transformed Data With the Median (Red Line)")
 
 ```
@@ -1061,22 +1062,22 @@ t_errors_rel <- tibble(x = x, y = dt((x - m_rel) / s_rel, df = df_rel) / s_rel)
 gg_t_abs <- errors %>%
   ggplot(aes(x=error, y = ..density..)) +
   geom_histogram(bins= 100) +
-  geom_density(col = ggthemr::swatch()[4]) +
-  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-  geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
+  geom_density(col = swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
+  geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
   coord_cartesian(xlim = c(-5, 5))
 
 gg_t_rel <- errors %>%
   ggplot(aes(x=error_rel, y = ..density..)) +
   geom_histogram(bins= 100) +
-  geom_density(col = ggthemr::swatch()[4]) +
-  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
-  geom_line(data = t_errors_rel, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
+  geom_density(col = swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
+  geom_line(data = t_errors_rel, aes(x = x, y = y), col = swatch()[6]) +
   coord_cartesian(xlim = c(-2, 2))
 
 ggarrange(gg_t_abs, gg_t_rel, nrow = 2) %>% 
   annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
-                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n At the bottom the relative differences from the mean.", color = ggthemr::swatch()[1], face = "italic", size = 10))
+                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n At the bottom the relative differences from the mean.", color = swatch()[1], face = "italic", size = 10))
 
 ```
 
@@ -1175,14 +1176,14 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
   gg[[j]] <- errors %>%
     ggplot(aes(x=error, y = ..density..)) +
     geom_histogram(bins= 100) +
-    geom_density(col = ggthemr::swatch()[4]) +
-    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = ggthemr::swatch()[5]) +
+    geom_density(col = swatch()[4]) +
+    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
     coord_cartesian(xlim = c(-2.5, 2.5)) +
     labs(x = paste("Error", j))
   
   if (class(t_shape) != "try-error"){
     gg[[j]] <- gg[[j]] +
-    geom_line(data = t_errors, aes(x = x, y = y), col = ggthemr::swatch()[6]) +
+    geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
     geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 1), size = 3) +
     geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 2, y = 1), size = 3)
   }
@@ -1192,7 +1193,7 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
 
 ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2) %>% 
   annotate_figure(top = "Absolute Differences from the Average Measurements of the Three Traps for Different Groups",
-                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = ggthemr::swatch()[1], face = "italic", size = 10))
+                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
 
 ```
 
