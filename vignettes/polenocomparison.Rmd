@@ -1,0 +1,121 @@
+---
+title: "Comparison of Pollen Traps"
+subtitle: "Evaluation of Similarity and Robustness of Three Swisens Poleno-type Pollen Traps Located in Payerne During the Birch Blooming Season 2020"
+author: "Simon Adamov"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+always_allow_html: TRUE
+output:
+  word_document: default
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      error = FALSE, 
+                      warning = FALSE, 
+                      message = FALSE,
+                      fig.retina =2.5,
+                      fig.width = 10,
+                      fig.height = 6,
+                      out.width = "100%",
+                      out.height = "100%")
+# This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
+
+library(caTools)
+library(MASS)
+library(tidyverse)
+library(lubridate)
+library(ggpubr)
+library(here)
+library(lme4)
+library(psych)
+library(robustlmm)
+library(goftest)
+library(kableExtra)
+
+# library(Amelia) # only used for one fct call to missmap()
+# library(data.table) # only used for transpose()
+# library(dunn.test)
+# library(conover.test)
+
+devtools::load_all()
+
+# I like the look of these plots
+# devtools::install_github('cttobin/ggthemr')
+# library(ggthemr)
+ggthemr("fresh")
+
+# caTools and bitops are required to knit this vignette, those are not tracked by renv and must be installed by the user
+# Due to old R-Version caTools must be installed from CRAN Archive, in order to knit markdown documents.
+# packageurl <- "http://cran.r-project.org/src/contrib/Archive/caTools/caTools_1.17.1.1.tar.gz"
+# install.packages(packageurl, repos=NULL, type="source")
+
+```
+
+```{r cache = TRUE}
+
+path_data <- paste0(here::here(), "/ext-data/")
+files_data <- list.files(path_data, pattern = "raw_data")
+
+data_raw <-
+  map(files_data, ~ data.table::fread(paste0(path_data, .x))) %>% 
+  setNames(files_data)
+
+names <- names(data_raw[[1]])
+names[3] <- "timestamp1"
+names[12] <- "timestamp2"
+names[1] <- "id1"
+names[10] <- "id2"
+names[16] <- "contextVersionId2"
+
+sort(names)
+
+data <- data_raw[[1]] %>% 
+  setNames(names) %>% 
+  select(classLabel, timestamp) %>% 
+  mutate(timestamp = as_datetime(timestamp),
+         classLabel = as_factor(classLabel),
+         date = date(timestamp),
+         hour = hour(timestamp) + 1,
+         trap = "poleno") %>% 
+  rowid_to_column("id")
+
+
+
+summary(data)
+glimpse(data)
+head(data, 200)
+
+# Device_idDevice, deviceVersion, valid have the same values for all observations
+# The three timestamps are merely seconds apart. For now I simply decided to use one of them. All of them are in agreement with the eventBaseName. 
+
+```
+
+```{r}
+
+# Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
+data_hourly <- data %>% 
+  group_by(date, hour, trap) %>% 
+  summarise(count = n()) %>% 
+  ungroup()
+
+
+data_hourly %>% 
+  ggplot(aes(x = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), y = count)) +
+  geom_line() +
+  ggtitle("Poleno-2: Hourly Total Pollen Counts") +
+  labs(x = "Date") +
+  geom_label(label = paste0("Number of Rows: \n", nrow(data)), mapping = aes(x = as_datetime("2020-03-01 01:00:00"), y = 9000))
+
+
+```
+
+
+
+
+
+
+

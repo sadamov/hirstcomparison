@@ -424,7 +424,6 @@ number_traps <- map(number_of_measurements, ~ bind_rows(
   summarise_at(vars(all_of(species_selection)), ~sum(. == 0))) %>% 
   mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured", "None measured")) %>% 
   select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus)) 
-  
 
 number_traps %>% 
   bind_rows() %>% 
