@@ -81,7 +81,7 @@ All pollen types were counted and included in the “total pollen” category. W
 
 ## Import
 
-```{r}
+```{r cache = TRUE}
 
 # The data was provided by Fiona Tummon, in form of 10-minute pollen counts per line and trap.
 # The data prep until that point was not re-evaluated.
@@ -296,6 +296,7 @@ data <- map(data, ~.x %>%
                          rowSums(.[names(.x) %in% species_selection], na.rm = TRUE), 
                          NA_real_)))
 
+
 ```
 
 
@@ -339,85 +340,94 @@ data_hourly <- map(data, ~.x %>%
 # map(data_hourly, ~.x %>% slice(tail(row_number(), 10)))
 
 data_hours3 <- map(data, ~.x %>% 
-  mutate(hours3 = case_when(
-    hour >= 1 & hour < 3 ~ "06:00",
-    hour >= 3 & hour < 6 ~ "12:00",
-    hour >= 6 & hour < 9 ~ "18:00",
-    hour >= 9 & hour < 12 ~ "24:00",
-    hour >= 12 & hour < 15 ~ "06:00",
-    hour >= 15 & hour < 18 ~ "12:00",
-    hour >= 18 & hour < 21 ~ "18:00",
-    hour >= 21 & hour < 24 ~ "24:00"
+  mutate(hour = case_when(
+    hour >= 1 & hour < 3 ~ "03:00",
+    hour >= 3 & hour < 6 ~ "06:00",
+    hour >= 6 & hour < 9 ~ "09:00",
+    hour >= 9 & hour < 12 ~ "12:00",
+    hour >= 12 & hour < 15 ~ "15:00",
+    hour >= 15 & hour < 18 ~ "18:00",
+    hour >= 18 & hour < 21 ~ "21:00",
+    hour >= 21 & hour <= 24 ~ "24:00"
     )
   ) %>% 
-  group_by(date, hours3, trap, line) %>% 
+  group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours6 <- map(data, ~.x %>% 
-  mutate(hours6 = case_when(
+  mutate(hour = case_when(
     hour >= 1 & hour <= 6 ~ "06:00",
     hour > 6 & hour <= 12 ~ "12:00",
     hour > 12 & hour <= 18 ~ "18:00",
     hour > 18 & hour <= 24 ~ "24:00"
     )
   ) %>% 
-  group_by(date, hours6, trap, line) %>% 
+  group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hours12 <- map(data, ~.x %>% 
-  mutate(hours12 = case_when(
+  mutate(hour = case_when(
     hour >= 1 & hour <= 12 ~ "12:00",
     hour > 12 & hour <= 24 ~ "24:00"
     )
   ) %>% 
-  group_by(date, hours12, trap, line) %>% 
+  group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_daily <- map(data_hourly, ~.x %>% 
                     group_by(date, trap, line) %>% 
                     summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+                    mutate(hour = "24:00") %>% 
                     ungroup())
+
+data_hourly <- map(data_hourly, ~.x %>% 
+  mutate(hour = paste0(sprintf("%02d", hour), ":00")))
 
 
 ```
 
-### Assess the Effect of Setting many Measurements to NA
+### Robustness of Traps and Missing Values
+
+We want to assess the similarity between traps for different temporal averages. It is known / expected that Hirst traps are not reliable for short time-windows. The statistics calculated below, are affected by too many measurements that are zero for any given time. But at the same time, we will also compare those Hirst traps to newer automatic traps with a high temporal resolution in a second vignette. It is therefore, crucial to understand how robust shorter observation-windows are for the Hirst traps. We basically want to find the shortest time interval that is still robust. 
+
+As described above there are two main options to prepare the data (otherwise we compare measurements that are zero for the largest portion of the data). First, we could only look at 10min-measurements where all traps measured. We will see below that, except for daily averages, this removes a large portion of the data. Esepcially, because this removal is carried out at the 10min-measurement step. Second, we could include 10min measurements only if at least one trap measured. This is probably what we want to do, as we are not interested in comparing zeros but actual measurements. Below we will deep dive into the statistics of comparing measurers. But first, we can simply look at how often one, two or all three traps measured pollen at the same time.
+Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
+
 
 ```{r}
-data_hourly_raw <- map(data_raw, ~.x %>%
-  group_by(date, hour, trap, line) %>%
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>%
-  ungroup())
 
-data_daily_raw <- map(data_hourly_raw, ~.x %>%
-                    group_by(date, trap, line) %>%
-                    summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>%
-                    ungroup())
+data_daily[[1]]
 
-
-number_of_measurements <- data_hourly %>% 
+data_aggs <- list(data_hourly, data_hours3, data_hours6, data_hours12, data_daily)
+number_of_measurements <- map(data_aggs, ~.x %>% 
   bind_rows %>%   
   group_by(trap, date, hour) %>% 
   summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
   replace(is.na(.), 0) %>% 
-  mutate_at(vars(all_of(species_selection)), funs(as.integer(as.integer(.) != 0))) %>% 
+  mutate_at(vars(all_of(species_selection)), ~(as.integer(as.integer(.) != 0))) %>% 
   ungroup %>% 
   group_by(date, hour) %>%
   summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
-  ungroup 
+  ungroup)
 
-bind_rows(number_of_measurements %>% 
+number_traps <- map(number_of_measurements, ~ bind_rows(
+  .x %>% 
     summarise_at(vars(all_of(species_selection)), ~sum(. == 3)),  
-  number_of_measurements %>% 
+  .x %>% 
     summarise_at(vars(all_of(species_selection)), ~sum(. == 2)),
-  number_of_measurements %>% 
+  .x %>% 
     summarise_at(vars(all_of(species_selection)), ~sum(. == 1)),
-  number_of_measurements %>% 
+  .x %>% 
   summarise_at(vars(all_of(species_selection)), ~sum(. == 0))) %>% 
-  mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured", "None measured")) %>% select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus) %>% 
+  mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured", "None measured")) %>% 
+  select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus)) 
+  
+
+number_traps %>% 
+  bind_rows() %>% 
   kable() %>% 
   kable_styling()
 
@@ -433,6 +443,17 @@ Several metrics were calculated: the frequency of occurrence for each pollen was
 These metrics are well-known and usually part of a Pollen Measurement study. It is common to calculate the means before setting values outside the blooming season to NA. Hence I created a data_raw list of tibbles above just for that purpose.
 
 ```{r}
+
+data_hourly_raw <- map(data_raw, ~.x %>%
+  group_by(date, hour, trap, line) %>%
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>%
+  ungroup())
+
+data_daily_raw <- map(data_hourly_raw, ~.x %>%
+                    group_by(date, trap, line) %>%
+                    summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>%
+                    ungroup())
+
 occurence_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
@@ -544,21 +565,19 @@ There are two pathways to evaluate the similarity of the measurements between th
 ```{r}
 
 if (resolution == "daily"){
-  data_anova <- map(data_daily, ~.x %>%
-                     mutate(timestamp = date))
+  data_anova <- data_daily
 } else if (resolution == "12hour"){
-  data_anova <- map(data_hours12, ~.x %>%
-                     mutate(timestamp = ymd_hm(paste0(date, hours12))))
+  data_anova <- data_hours12
 } else if (resolution == "6hour"){
-  data_anova <- map(data_hours6, ~.x %>%
-                     mutate(timestamp = ymd_hm(paste0(date, hours6))))
+  data_anova <- data_hours6
 } else if (resolution == "3hour"){
-  data_anova <- map(data_hours3, ~.x %>%
-                     mutate(timestamp = ymd_hm(paste0(date, hours3))))
+  data_anova <- data_hours3
 } else if (resolution == "hourly"){
-  data_anova <- map(data_hourly, ~.x %>%
-                     mutate(timestamp = ymd_hm(paste0(date, paste0(sprintf("%02d", hour), ":00")))))
+  data_anova <-data_hourly
 }
+
+data_anova <- map(data_anova, ~.x %>%
+  mutate(timestamp = ymd_hm(paste0(date, hour))))
 
 data_anova <- data_anova %>% 
   bind_rows() %>% 

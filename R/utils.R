@@ -17,21 +17,19 @@ plot_pollen <- function(species, resolution, group, traps, rm_zeros){
 
   # The first plot needs actual datetimes for the x-axis, hence we need some complicated if statements
   if (resolution == "daily"){
-    data_plot <- map(data_daily, ~.x %>%
-                       mutate(timestamp = date))
+    data_plot <- data_daily
   } else if (resolution == "12hour"){
-    data_plot <- map(data_hours12, ~.x %>%
-                       mutate(timestamp = ymd_hm(paste0(date, hours12))))
+    data_plot <- data_hours12
   } else if (resolution == "6hour"){
-    data_plot <- map(data_hours6, ~.x %>%
-                       mutate(timestamp = ymd_hm(paste0(date, hours6))))
+    data_plot <- data_hours6
   } else if (resolution == "3hour"){
-    data_plot <- map(data_hours3, ~.x %>%
-                       mutate(timestamp = ymd_hm(paste0(date, hours3))))
+    data_plot <- data_hours3
   } else if (resolution == "hourly"){
-    data_plot <- map(data_hourly, ~.x %>%
-                       mutate(timestamp = ymd_hm(paste0(date, paste0(sprintf("%02d", hour), ":00")))))
+    data_plot <-data_hourly
   }
+
+  data_plot <- map(data_plot, ~.x %>%
+    mutate(timestamp = ymd_hm(paste0(date, hour))))
 
   data_plot <- data_plot %>%
     bind_rows %>%
