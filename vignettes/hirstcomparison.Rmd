@@ -11,6 +11,8 @@ output:
     df_print: paged
 ---
 
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
 ```{r}
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
 
@@ -397,41 +399,51 @@ As described above there are two main options to prepare the data (otherwise we 
 Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
 
 
-```{r}
-
-data_daily[[1]]
+```{r results="asis"}
 
 data_aggs <- list(data_hourly, data_hours3, data_hours6, data_hours12, data_daily)
 number_of_measurements <- map(data_aggs, ~.x %>% 
   bind_rows %>%   
   group_by(trap, date, hour) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   replace(is.na(.), 0) %>% 
-  mutate_at(vars(all_of(species_selection)), ~(as.integer(as.integer(.) != 0))) %>% 
+  # mutate_at(vars(all_of(species_selection)), ~if_else((. >= 10), ., 0)) %>% 
+  mutate_at(vars(all_of(species_selection), Total), ~(as.integer(as.integer(.) != 0))) %>% 
   ungroup %>% 
   group_by(date, hour) %>%
-  summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~sum(., na.rm = TRUE)) %>% 
   ungroup)
 
-number_traps <- map(number_of_measurements, ~ bind_rows(
+timesteps <- map(data_aggs, ~ .x[[1]] %>% nrow())
+
+number_traps <- map2(number_of_measurements, timesteps, ~ bind_rows(.x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 3)),  
   .x %>% 
-    summarise_at(vars(all_of(species_selection)), ~sum(. == 3)),  
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 2)),
   .x %>% 
-    summarise_at(vars(all_of(species_selection)), ~sum(. == 2)),
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 1)),
   .x %>% 
-    summarise_at(vars(all_of(species_selection)), ~sum(. == 1)),
-  .x %>% 
-  summarise_at(vars(all_of(species_selection)), ~sum(. == 0))) %>% 
-  mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured", "None measured")) %>% 
-  select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus)) 
+  summarise_at(vars(all_of(species_selection), Total), ~sum(. == 0))
+  ) %>% 
+  mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured", "None measured")) %>%
+  mutate_at(vars(all_of(species_selection), Total), ~ scales::percent(. / !!.y)) %>% 
+  select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
 
 number_traps %>% 
   bind_rows() %>% 
   kable() %>% 
-  kable_styling()
+  kable_styling("striped") %>% 
+  pack_rows("Hourly Averages", 1, 4) %>% 
+  pack_rows("3-Hour Averages", 5, 8) %>% 
+  pack_rows("6-Hour Averages", 9, 12) %>% 
+  pack_rows("12-Hour Averages", 13, 16) %>% 
+  pack_rows("Daily Averages", 17, 20)
 
 
 ```
+
+So it seems that it actually happens often that only a fraction of the traps is measuring pollen. It can be expected that the discrepancies mostly occur during times with low pollen concentrations. For that reason, we can filter everything below 10 pollen /m^3 and see how the percentages change. But the results don't change dramatically after doing so.
+
 
 # Tabular Comparison of Various Metrics
 
