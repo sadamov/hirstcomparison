@@ -130,8 +130,26 @@ data_hirst <- data.table::fread(paste0(path_data, files_hirst)) %>%
 
 ```
 
-```{r fig.height=10}
+```{r}
+# Calibration was carried out on the Poleno traps during specific time slots (see: https://docs.google.com/document/d/1Eyy7G7D_f_FkovU7Ui_f3e8nbrHRF3GXKJXkU-_JPYQ/edit#)
 
+
+
+data_hourly_comb %>% 
+  # mutate() %>%
+  group_by(timestamp) %>%
+  mutate_at(vars(total), function(x){
+      if(all(as.integer(x) == 0))
+        return(NA) # This will set all measurements to NA if no trap measured any pollen
+      else
+        return(x)
+  }) %>% 
+  summary
+
+```
+
+
+```{r fig.height=10}
 
 data_hourly_comb <- data_poleno_hourly %>% 
   bind_rows %>% 
@@ -143,16 +161,6 @@ data_hourly_comb %>%
   ggtitle("Hourly Total Pollen Counts") +
   labs(x = "Date")
 
-data_hourly_comb %>% 
-  # mutate() %>% 
-  group_by(timestamp) %>%
-  mutate_at(vars(total), function(x){
-      if(all(as.integer(x) == 0))
-        return(NA) # This will set all measurements to NA if no trap measured any pollen
-      else
-        return(x)
-  }) %>% 
-  summary
 ```
 
 
