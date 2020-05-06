@@ -60,7 +60,7 @@ ggthemr("fresh")
 path_data <- paste0(here::here(), "/ext-data/")
 files_data <- list.files(path_data, pattern = "raw_data")
 
-data_raw <-
+data_raw_poleno <-
   map(files_data, ~ data.table::fread(paste0(path_data, .x))) %>% 
   setNames(files_data)
 
@@ -71,23 +71,20 @@ names[1] <- "id1"
 names[10] <- "id2"
 names[16] <- "contextVersionId2"
 
-sort(names)
-
-data <- data_raw[[1]] %>% 
+data_poleno <- map2(data_raw_poleno, 1:3, ~.x %>% 
   setNames(names) %>% 
   select(classLabel, timestamp) %>% 
   mutate(timestamp = as_datetime(timestamp),
          classLabel = as_factor(classLabel),
          date = date(timestamp),
          hour = hour(timestamp) + 1,
-         trap = "poleno") %>% 
-  rowid_to_column("id")
+         trap = paste0("poleno", .y)) %>% 
+  filter(timestamp > ymd_hms("2020-02-15 00:00:00"),
+         timestamp <= ymd_hms("2020-05-03 23:59:59")))
 
-
-
-summary(data)
-glimpse(data)
-head(data, 200)
+# summary(data)
+# glimpse(data)
+# head(data, 200)
 
 # Device_idDevice, deviceVersion, valid have the same values for all observations
 # The three timestamps are merely seconds apart. For now I simply decided to use one of them. All of them are in agreement with the eventBaseName. 
@@ -96,22 +93,68 @@ head(data, 200)
 
 ```{r}
 
-# Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
-data_hourly <- data %>% 
+# Hour 1 represents the duration 00:00:01 - 01:00:00, and same for all hours up to 24
+data_poleno_hourly <- map2(data_poleno, 1:3, ~.x %>% 
   group_by(date, hour, trap) %>% 
-  summarise(count = n()) %>% 
-  ungroup()
-
-
-data_hourly %>% 
-  ggplot(aes(x = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), y = count)) +
-  geom_line() +
-  ggtitle("Poleno-2: Hourly Total Pollen Counts") +
-  labs(x = "Date") +
-  geom_label(label = paste0("Number of Rows: \n", nrow(data)), mapping = aes(x = as_datetime("2020-03-01 01:00:00"), y = 9000))
-
+  summarise(total = as.integer(n())) %>% 
+  ungroup() %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00"))) %>% 
+  padr::pad(by = "timestamp") %>%  # This will populate missing hours with zeros where no pollen were measured (actually very few)
+  mutate(total = if_else(is.na(total), 0L, total), # Padding introduced 119 NAs
+         date = date(timestamp), 
+         hour = hour(timestamp),
+         trap = paste0("poleno", .y))) 
 
 ```
+
+```{r}
+
+# We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
+# We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
+
+files_hirst <- list.files(path_data, pattern = "dwh.csv")
+
+data_hirst <- data.table::fread(paste0(path_data, files_hirst)) %>% 
+  as_tibble() %>%
+  select(- katacuh0) %>% # This seems to be a combination of two species already counted separately.
+  mutate_at(vars(khambrh0:khjunch0), ~ if_else(. < 0, 0, .)) %>% 
+  mutate(timestamp = dmy_hm(timestamp),
+         date = date(timestamp),
+         hour = hour(timestamp) + 1,
+         trap = "hirst",
+         total = rowSums(select(., -timestamp))) %>% 
+  filter(timestamp >= ymd_hms("2020-02-15 00:00:00"),
+         timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
+  mutate(timestamp = timestamp + hours(1)) %>% # To align it with my definition of hour (mine go from 01-24, the original data from 0-23)
+  select(timestamp, date, hour, trap, total)
+
+```
+
+```{r fig.height=10}
+
+
+data_hourly_comb <- data_poleno_hourly %>% 
+  bind_rows %>% 
+  bind_rows(data_hirst) 
+
+data_hourly_comb %>% 
+  ggplot(aes(x = timestamp, y = total, col = trap)) +
+  geom_line() +
+  ggtitle("Hourly Total Pollen Counts") +
+  labs(x = "Date")
+
+data_hourly_comb %>% 
+  # mutate() %>% 
+  group_by(timestamp) %>%
+  mutate_at(vars(total), function(x){
+      if(all(as.integer(x) == 0))
+        return(NA) # This will set all measurements to NA if no trap measured any pollen
+      else
+        return(x)
+  }) %>% 
+  summary
+```
+
 
 
 

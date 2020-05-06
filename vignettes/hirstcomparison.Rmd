@@ -240,7 +240,7 @@ measurements_to_exclude <- data_raw %>%
   group_by(datetime) %>%
   mutate_at(vars(all_of(paste0(species_selection, "_exclude"))), function(x){
       if(all(as.integer(x) == 0))
-        return(NA) # This will set all measurements to NA if one of the traps did not measure any pollen
+        return(NA) # This will set all measurements to NA if no trap measured any pollen
       else
         return(0)
   }) %>%
@@ -437,8 +437,15 @@ number_traps %>%
   pack_rows("3-Hour Averages", 5, 8) %>% 
   pack_rows("6-Hour Averages", 9, 12) %>% 
   pack_rows("12-Hour Averages", 13, 16) %>% 
-  pack_rows("Daily Averages", 17, 20)
+  pack_rows("Daily Averages", 17, 20) %>% 
+  column_spec(c(1, 6), border_right = TRUE)
 
+# For rendering docx documents
+# NOT ALLOWED AT MCH TO EXECUTE .exe file
+# save_kable(table_traps, file = "table_traps.png")
+# webshot::install_phantomjs()
+
+ 
 
 ```
 
@@ -1158,13 +1165,14 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ```
 
-## For Different Pollen Pollen Size Groups
+## For Different Pollen Size Groups
 
 ```{r fig.height=9, eval = FALSE}
 # set.seed(123)
 gg <- list()
 cvm <- numeric()
 ad <- numeric()
+t_shape <- list()
 
 for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
   errors <- data_transformed %>% 
@@ -1180,13 +1188,12 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
   
   sd <- sd(errors$error, na.rm = TRUE)
   e <- simpleError("test error")
-  t_shape <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
+  t_shape[[j]] <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
   # t_shape <- QRM::fit.mst(errors$error, method = "Brent", upper = 2, lower = 1, nit = 2000, tol = 1e-10) # https://magesblog.com/post/2013-03-12-how-to-use-optim-in-r/ or here https://stat.ethz.ch/R-manual/R-devel/library/stats/html/optim.html
-  class(t_shape)
-  if (class(t_shape) != "try-error"){
-    m <- t_shape$par.ests[2]
-    s <- t_shape$par.ests[3]
-    df <- t_shape$par.ests[1]
+  if (class(t_shape[[j]]) != "try-error"){
+    m <- t_shape[[j]]$par.ests[2]
+    s <- t_shape[[j]]$par.ests[3]
+    df <- t_shape[[j]]$par.ests[1]
     t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
     
     # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
@@ -1224,6 +1231,14 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
 ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2) %>% 
   annotate_figure(top = "Absolute Differences from the Average Measurements of the Three Traps for Different Groups",
                   bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+# Sample Blooming Season Starts and SPI with Theoretical Error Distribution
+
+```{r}
+
+t_shape %>% str
 
 ```
 
