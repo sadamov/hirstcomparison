@@ -558,7 +558,7 @@ Now let's plot some time series to get a better overview of the data. In the plo
 
 ```{r }
 
-plot <- plot_pollen(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+plot <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
 plot
 # ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
 
