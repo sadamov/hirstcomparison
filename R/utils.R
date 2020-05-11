@@ -82,13 +82,13 @@ plot_comb <- function(resolution, traps, rm_zeros){
 
   # The first plot needs actual datetimes for the x-axis, hence we need some complicated if statements
   if (resolution == "daily"){
-    data_plot <- data_daily
+    data_plot <- data_daily_comb
   } else if (resolution == "12hour"){
-    data_plot <- data_hours12
+    data_plot <- data_hours12_comb
   } else if (resolution == "6hour"){
-    data_plot <- data_hours6
+    data_plot <- data_hours6_comb
   } else if (resolution == "3hour"){
-    data_plot <- data_hours3
+    data_plot <- data_hours3_comb
   } else if (resolution == "hourly"){
     data_plot <-data_hourly_comb
   }
@@ -97,9 +97,8 @@ plot_comb <- function(resolution, traps, rm_zeros){
   #                    mutate(timestamp = ymd_hm(paste0(date, hour))))
 
   data_plot <- data_plot %>%
-    bind_rows %>%
     filter(trap %in% traps) %>%
-    mutate_at(vars("trap"), ~ as.factor(.)) %>%
+    mutate(trap = as.factor(trap)) %>%
     {if(rm_zeros) filter(., total > 0) else .}
 
   gg1 <- data_plot %>%

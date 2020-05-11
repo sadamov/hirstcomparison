@@ -5,10 +5,10 @@ author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 always_allow_html: TRUE
 output:
-  word_document: default
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r}
@@ -16,6 +16,7 @@ output:
 
 species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
 resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+traps = c("poleno2", "poleno4", "poleno5", "hirst")
 
 ```
 
@@ -63,7 +64,7 @@ ggthemr("fresh")
 
 ```
 
-```{r cache = TRUE}
+```{r cache = TRUE, cache.lazy = FALSE}
 
 path_data <- paste0(here::here(), "/ext-data/")
 files_data <- list.files(path_data, pattern = "raw_data")
@@ -212,30 +213,38 @@ data_hourly_comb <- data_hourly_comb_raw %>%
 
 ```
 
+
+```{r}
+
+data_daily_comb <- data_hourly_comb %>% 
+                    group_by(date, trap) %>% 
+                    summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+                    mutate(hour = "12:00",
+                           timestamp = date) %>% 
+                    ungroup()
+
+
+```
+
 ```{r fig.height=10}
 data_hourly_comb %>% 
   pivot_wider(names_from = trap, values_from = !!sym(species)) %>% 
   arrange(timestamp) %>% 
   as.data.frame() %>% 
   Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for All Traps")
-
-data_hourly_comb %>% 
-  arrange(timestamp) %>%
-  pivot_wider(names_from = trap, values_from = !!sym(species)) %>% 
-  filter(is.na(hirst))
   
 
 ```
 
 
 ```{r fig.height=10}
-data_hourly_comb %>% 
-  ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
-  geom_line() +
-  ggtitle("Hourly Total Pollen Counts") +
-  labs(x = "Date")
+# data_hourly_comb %>% 
+#   ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
+#   geom_line() +
+#   ggtitle("Hourly Total Pollen Counts") +
+#   labs(x = "Date")
 
-plot_comb(resolution = resolution, traps = c("poleno2", "poleno4", "poleno5", "hirst"), rm_zeros = TRUE)
+plot_comb(resolution = resolution, traps, rm_zeros = TRUE)
 
 ```
 
@@ -259,14 +268,25 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-data_anova <- data_hourly_comb
+if (resolution == "daily"){
+  data_anova <- data_daily_comb
+} else if (resolution == "12hour"){
+  data_anova <- data_hours12_comb
+} else if (resolution == "6hour"){
+  data_anova <- data_hours6_comb
+} else if (resolution == "3hour"){
+  data_anova <- data_hours3_comb
+} else if (resolution == "hourly"){
+  data_anova <-data_hourly_comb
+}
 
 data_anova <- data_anova %>% 
   bind_rows() %>% 
+  filter(trap %in% traps) %>% 
   mutate(trap = as.factor(trap)) %>% 
   group_by(trap, timestamp) %>% 
   summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
-  na.omit() %>% 
+  # na.omit() %>% 
   ungroup 
 
 data_transformed <- data_anova %>% 
@@ -307,7 +327,7 @@ methods <- c("pearson", "spearman", "kendall")
 data_corr <- data_transformed %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
   select(!!sym(species), trap, timestamp) %>% 
   pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
-  setNames(c("timestamp", c("hirst", paste0("poleno", c(2, 4, 5)))))
+  setNames(c("timestamp", traps))
 
 corr_matrix <- map(methods, ~corr.test(
   data_corr %>% select(-timestamp),
@@ -324,43 +344,34 @@ corr_matrix <- map(methods, ~corr.test(
 
 ```
 
-```{r}
+```{r fig.height=10, fig.width = 14}
+
+traps_pairs <- combn(traps, 2)
+gg_corr <- list()
 
 ci <- map(corr_matrix, ~.x %>% 
-  pluck(10)) %>% 
+  pluck(10)) %>% # Here we find the adjusted confidence intervals
   bind_rows() %>% 
   round(2) %>% 
-  mutate(method = rep(methods, each = 6)) %>%  
+  mutate(method = rep(methods, each = ncol(traps_pairs))) %>%  
   mutate(ci = paste0("R-", tools::toTitleCase(method), ": ", lower.adj, " - ", upper.adj)) %>% 
   pull(ci)
 
-gg1 <- data_corr %>% 
-  ggplot(aes(x = trap2, y = trap4)) + 
+for (i in 1:ncol(traps_pairs)){
+  
+  gg_corr[[i]] <- data_corr %>% 
+  ggplot(aes(x = !!sym(traps_pairs[1, i]), y = !!sym(traps_pairs[2, i]))) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
+  geom_smooth(alpha = 0.1, method = "loess") +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 3.6, y = 9)) +
+  geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = 3.6, y = 9)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
-
-gg2 <- data_corr %>% 
-  ggplot(aes(x = trap2, y = trap8)) + 
-  geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
-  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 3.6, y = 9)) +
-  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
-
-gg3 <- data_corr %>% 
-  ggplot(aes(x = trap4, y = trap8)) + 
-  geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
-  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 3.6, y = 9)) +
-  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
+  
+}
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
 
-ggarrange(gg1, gg2, gg3, ncol = 3) %>%
+ggarrange(plotlist = gg_corr) %>%
   annotate_figure(top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
 ```
 
@@ -372,62 +383,44 @@ The well established AB-method for clinical trials can be used here as well to c
 
 ```{r fig.height=9}
 
+gg_ab <- list()
+
 data_altman <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
     pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
-    setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
-    mutate(mean24 = if_else(!is.na(trap2) | !is.na(trap4),
-                          rowSums(.[2:3], na.rm = TRUE) / 2, 
-                          NA_real_),
-           mean28 = if_else(!is.na(trap2) | !is.na(trap8),
-                          rowSums(.[c(2, 4)], na.rm = TRUE) / 2, 
-                          NA_real_),
-           mean48 = if_else(!is.na(trap4) | !is.na(trap8),
-                          rowSums(.[3:4], na.rm = TRUE) / 2, 
-                          NA_real_),
-           diff24 = trap4 - trap2,
-           diff28 = trap8 - trap2,
-           diff48 = trap8 - trap4)
+    setNames(c("timestamp", traps))
+
+for (i in 1:ncol(traps_pairs)) {
+  data_altman <- data_altman %>%
+    mutate(
+      !!paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")") := if_else(
+        !is.na(!!sym(traps_pairs[1, i])) | !is.na(!!sym(traps_pairs[2, i])),
+        rowSums(.[c(grep(paste0("^", traps_pairs[1, i], "$"), names(.)), grep(paste0("^", traps_pairs[2, i], "$"), names(.)))], na.rm = TRUE) / 2,
+        NA_real_
+      ),!!paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")") := !!sym(traps_pairs[1, i]) -!!sym(traps_pairs[2, i])
+    )
+}
 
 sd_diff <- data_altman %>% 
   select(starts_with("diff")) %>% 
   summarise_all(~sd(., na.rm = TRUE)) %>% 
-  pivot_longer(1:3, values_to = "sd", names_to = "dummy") %>% 
+  pivot_longer(1:ncol(traps_pairs), values_to = "sd", names_to = "dummy") %>% 
   pull(sd)
 
-gg_ab1 <- data_altman %>% 
-  ggplot(aes(x = mean24, y = diff24)) +
-  geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[1] * 3, sd_diff[1] * 3)) +  
-  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_smooth(alpha = 0.1) +
-  labs(y = "Difference(trap4 - trap2)", x = "Mean(trap4, trap2)")
+for (i in 1:ncol(traps_pairs)) {
+  gg_ab[[i]] <- data_altman %>% 
+    ggplot(aes(x = !!sym(paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")")), y = !!sym(paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")")))) +
+    geom_point(alpha = 0.5) +
+    coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[i] * 3, sd_diff[i] * 3)) +  
+    geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+    geom_abline(slope = 0, intercept = sd_diff[i] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+    geom_abline(slope = 0, intercept = sd_diff[i] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
+    geom_smooth(alpha = 0.1, method = "loess") 
+}
   
-gg_ab2 <- data_altman %>% 
-  ggplot(aes(x = mean28, y = diff28)) +
-  geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[2] * 3, sd_diff[2] * 3)) +  
-  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_smooth(alpha = 0.1) +
-  labs(y = "Difference(trap8 - trap2)", x = "Mean(trap8, trap2)")
-
-gg_ab3 <- data_altman %>% 
-  ggplot(aes(x = mean48, y = diff48)) +
-  geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[3] * 3, sd_diff[3] * 3)) +  
-  geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
-  geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
-  geom_smooth(alpha = 0.1) +
-  labs(y = "Difference(trap8 - trap4)", x = "Mean(trap8, trap4)")
-
 title <- "Altman-Bland Plots for all Traps"
 
-ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
+ggarrange(plotlist = gg_ab) %>%
   annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
   
 
@@ -486,7 +479,7 @@ gg_res2 <- tibble(residuals = residuals(fit_anova, type = "pearson")) %>%
   stat_qq_line()
 
 ggarrange(gg_res1, gg_res2, nrow = 1) %>% 
-  annotate_figure(top = "QQ-Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
+  annotate_figure(top = "QQ-Plot for the ANOVA Residuals With (right) and Without Logarithmizing")
 
 ```
 
@@ -503,16 +496,14 @@ gg_tukey1 <- tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted =
   ggplot(aes(x = fitted, y = resid)) +
   geom_point(alpha = 0.5, position = position_jitter(width = 5, height = 0)) +
   # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-  geom_abline(slope = 0, intercept = 0, col = swatch()[3]) +
-  coord_cartesian(ylim = c(-500, 500))
+  geom_abline(slope = 0, intercept = 0, col = swatch()[3])
 
 gg_tukey2 <- 
   tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
     ggplot(aes(x = fitted, y = resid)) +
-    geom_point(alpha = 0.5, position = position_jitter(width = 0.02, height = 0)) +
+    geom_point(alpha = 0.5, position = position_jitter(width = 0.01, height = 0)) +
     # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
-    geom_abline(slope = 0, intercept = 0, col = swatch()[3])+
-  coord_cartesian(ylim = c(-3, 3))
+    geom_abline(slope = 0, intercept = 0, col = swatch()[3])
 
 ggarrange(gg_tukey1, gg_tukey2)  %>% 
   annotate_figure(top = "Tukey Anscombe - Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
@@ -735,17 +726,20 @@ We are mostly interested to observe the difference of one specific trap compared
 In this first section we compare relative and absolute differences from the mean. Fitting parameters of a T-Distribution (distribution family visually chosen) using MLE (fitdistr / fit.st). The analysis is based on the transformed values, but the findings are usually independent of the log-transformation.
 
 ```{r warning=FALSE}
+
 errors <- data_corr %>% 
-  mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                          rowSums(.[2:4], na.rm = TRUE) / 3, 
-                          NA_real_)) %>% 
-  mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)) %>% 
-  pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap") %>% 
+  mutate(exclude = rowSums(is.na(data_corr)) < 3, # At least one trap should have measured something otherise we are not calculating the means
+    mean = if_else(exclude,
+                   rowSums(.[2:ncol(traps_pairs)], na.rm = TRUE) / ncol(traps_pairs), 
+                   NA_real_)) %>% 
+  na.omit() %>% 
+  mutate_at(vars(all_of(traps)), ~(. - mean)) %>% 
+  pivot_longer(cols = 2:(1 + ncol(traps_pairs)), values_to = "error", names_to = "trap") %>% 
   mutate(error_rel = error / mean) %>% 
-  select(-mean)
+  select(-mean, -exclude)
 
 sd(errors$error, na.rm = TRUE)
-sd(errors$error_rel, na.rm = TRUE)
+sd(errors$erro_rel[!is.na(errors$error_rel) & errors$error_rel < Inf]) # Those were introduced above by dividing by zero
 
 x <- seq(-2.5, 2.5, length.out = 10000)
 t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
@@ -755,7 +749,7 @@ s <- t_shape$estimate[2]
 df <- t_shape$estimate[3]
 t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
 
-t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
+t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel) & errors$error_rel < Inf], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
 m_rel <- t_shape_rel$estimate[1]
 s_rel <- t_shape_rel$estimate[2]
 df_rel <- t_shape_rel$estimate[3]
@@ -830,82 +824,6 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ```
 
-## For Different Pollen Size Groups
-
-```{r fig.height=9, eval = FALSE}
-# set.seed(123)
-gg <- list()
-cvm <- numeric()
-ad <- numeric()
-t_shape <- list()
-
-for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
-  errors <- data_transformed %>% 
-    select(!!sym(j), trap, timestamp) %>% 
-    pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
-    setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
-    mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                          rowSums(.[2:4], na.rm = TRUE) / 3, 
-                          NA_real_)) %>% 
-    mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)) %>% 
-    pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap") %>% 
-    select(-mean)
-  
-  sd <- sd(errors$error, na.rm = TRUE)
-  e <- simpleError("test error")
-  t_shape[[j]] <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
-  # t_shape <- QRM::fit.mst(errors$error, method = "Brent", upper = 2, lower = 1, nit = 2000, tol = 1e-10) # https://magesblog.com/post/2013-03-12-how-to-use-optim-in-r/ or here https://stat.ethz.ch/R-manual/R-devel/library/stats/html/optim.html
-  if (class(t_shape[[j]]) != "try-error"){
-    m <- t_shape[[j]]$par.ests[2]
-    s <- t_shape[[j]]$par.ests[3]
-    df <- t_shape[[j]]$par.ests[1]
-    t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
-    
-    # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
-    
-    for (i in 1:1000) {
-      cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
-      ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
-      
-      cvm[i] <- cvm_test$p.value
-      ad[i] <- ad_test$p.value
-    }
-    
-    cvm <- mean(cvm)
-    ad <- mean(ad)
-  }
-  
-  gg[[j]] <- errors %>%
-    ggplot(aes(x=error, y = ..density..)) +
-    geom_histogram(bins= 100) +
-    geom_density(col = swatch()[4]) +
-    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
-    coord_cartesian(xlim = c(-2.5, 2.5)) +
-    labs(x = paste("Error", j))
-  
-  if (class(t_shape) != "try-error"){
-    gg[[j]] <- gg[[j]] +
-    geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
-    geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 1), size = 3) +
-    geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 2, y = 1), size = 3)
-  }
-    
-}
-
-
-ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = "Absolute Differences from the Average Measurements of the Three Traps for Different Groups",
-                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
-
-```
-
-# Sample Blooming Season Starts and SPI with Theoretical Error Distribution
-
-```{r}
-
-t_shape %>% str
-
-```
 
 
 
