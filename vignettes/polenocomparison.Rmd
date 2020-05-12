@@ -302,7 +302,6 @@ plot_comb(resolution = resolution, traps, rm_zeros = TRUE)
 
 
 
-
 # Statistical Comparison
 
 The analysis should also serve as a base for a scientific publication. We want to assess the robustness and similarity of the Hirst traps. For that purpose we will compare the measured Pollen concentrations for the three different traps. We will assess the similarity between the three traps and test their robustness for different averaging windows. This task of comparing measures has been discussed in scientific literature for many decades and it is not an easy task. I will apply many different approaches to visually and mathematically check the similarity between the three measurements and will add some remarks about their pros, cons and underlying assumptions.. It is in the nature of the problem that no conclusion will be made at the end that holds with a 100% certainty. 
@@ -379,7 +378,7 @@ methods <- c("pearson", "spearman", "kendall")
 data_corr <- data_transformed %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
   select(!!sym(species), trap, timestamp) %>% 
   pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
-  setNames(c("timestamp", traps))
+  setNames(c("timestamp", sort(traps)))
 
 corr_matrix <- map(methods, ~corr.test(
   data_corr %>% select(-timestamp),
@@ -440,7 +439,7 @@ gg_ab <- list()
 data_altman <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
     pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
-    setNames(c("timestamp", traps))
+    setNames(c("timestamp", sort(traps)))
 
 for (i in 1:ncol(traps_pairs)) {
   data_altman <- data_altman %>%
@@ -463,11 +462,11 @@ for (i in 1:ncol(traps_pairs)) {
   gg_ab[[i]] <- data_altman %>% 
     ggplot(aes(x = !!sym(paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")")), y = !!sym(paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")")))) +
     geom_point(alpha = 0.5) +
-    coord_cartesian(xlim = c(3, 8), ylim = c(-sd_diff[i] * 3, sd_diff[i] * 3)) +  
+    coord_cartesian(xlim = c(0, 10), ylim = c(-sd_diff[i] * 5, sd_diff[i] * 5)) +  
     geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
     geom_abline(slope = 0, intercept = sd_diff[i] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
     geom_abline(slope = 0, intercept = sd_diff[i] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
-    geom_smooth(alpha = 0.1, method = "loess") 
+    geom_smooth(formula = "y ~ x", alpha = 0.1, method = "loess") 
 }
   
 title <- "Altman-Bland Plots for all Traps"
@@ -477,6 +476,29 @@ ggarrange(plotlist = gg_ab) %>%
   
 
 ```
+
+We observe that Poleno 2 is generally lower than the other traps, and Hirst is significantly higher than the Poleno traps.
+I will have a closer look at the differences between poleno 2 and poleno 5. The data shows that between March 5 and March 16 the largest differences occur. 
+
+```{r}
+
+gg_hist <- data_altman %>% 
+  filter(`diff(poleno2 - poleno5)` < -1) %>% 
+  ggplot()+
+  geom_histogram(aes(x = timestamp), bins = 50) 
+
+gg_hist %>%  
+  annotate_figure(bottom = text_grob("The largest differences occur during the first two weeks of March. According to the measurements at MCH \n  the species blooming during that period are Cupressus, Eibe, Erle, Esche, Pappel, Weide, Ulme, Hasel", color = swatch()[1], face = "italic", size = 10), top = "Main Differences Between Poleno 2 and Poleno 5")
+
+```
+
+```{r}
+ data_altman %>% 
+  filter(abs(`diff(poleno2 - poleno5)`) > 3) %>% 
+  ggplot()+
+  geom_histogram(aes(x = timestamp), bins = 50) 
+```
+
 
 ## Parametric / ANOVA
 
