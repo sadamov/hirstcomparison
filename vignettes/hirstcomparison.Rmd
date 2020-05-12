@@ -1167,12 +1167,13 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ## For Different Pollen Size Groups
 
-```{r fig.height=9, eval = FALSE}
+```{r fig.height=6, eval = FALSE}
 # set.seed(123)
 gg <- list()
 cvm <- numeric()
 ad <- numeric()
 t_shape <- list()
+samples <- list()
 
 for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
   errors <- data_transformed %>% 
@@ -1198,7 +1199,7 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
     
     # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
     
-    for (i in 1:1000) {
+    for (i in 1:1) {
       cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
       ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
       
@@ -1209,6 +1210,127 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
     cvm <- mean(cvm)
     ad <- mean(ad)
   }
+  
+    samples[[j]] <- rt(1000, df = df) * s + m # This gives us 10k random samples for the absolute log-differences from the mean. See here again for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
+  
+  gg[[j]] <- errors %>%
+    ggplot(aes(x=error, y = ..density..)) +
+    geom_histogram(bins= 100) +
+    geom_density(col = swatch()[4]) +
+    geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
+    coord_cartesian(xlim = c(-2.5, 2.5)) +
+    labs(x = paste("Error", j))
+  
+  if (class(t_shape) != "try-error"){
+    gg[[j]] <- gg[[j]] +
+    geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
+    geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = -2, y = 1), size = 3) +
+    geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2), "\n #:", nrow(errors %>% filter(!is.na(error)))), aes(x = 2, y = 1), size = 3)
+  }
+    
+}
+
+
+ggarrange(plotlist = gg, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = "Absolute Differences from the Average Measurements of the Three Traps for Different Groups",
+                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+```{r fig.height=9, eval = FALSE}
+
+# The sampled errors from above are differences of each trap from the common mean (logarithmic).
+# To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
+gg_spi <- list()
+sampled_days_random <- list()
+sampled_spi <- list()
+
+for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
+  
+  # In the following we will be working with the mean values from the three traps.
+  mean_traps <- data_anova %>% 
+      select(!!sym(j), trap, timestamp) %>% 
+      pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
+      setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+      mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
+                            rowSums(.[2:4], na.rm = TRUE) / 3, 
+                            NA_real_)) %>% 
+    pull(mean) %>% 
+    na.omit()
+  
+  # Now for each of these daily averages we want to estimate a spread, according to the fitted t-distribution above. This reflects the uncertainty between the three measurers. 
+  relative_differences <- exp(samples[[j]]) # Samples were generated in step above, make sure that same species were applied
+  
+  # These relative differences from the mean are sampled fractions. Basically 10000 options of what a trap could have measured for that day. Most samples should be close to the empirical common mean, but some will stray further apart. As these are relative differences from the mean, the absolute measurement error depends on the measured pollen concentration of any specific day.
+  
+  sampled_days <- map(mean_traps, ~ .x * (relative_differences))
+  
+  # Now we will pick random measurements for each of the 89 days, and see how that affects the SPI
+
+  for (i in 1:1000){
+    sampled_days_random[[i]] <- map(sampled_days, ~sample(.x, 1, replace = FALSE)) %>% flatten_dbl() %>% sum
+  }
+  
+  sampled_spi[[j]] <- sampled_days_random %>% flatten_dbl %>% as_tibble()
+  
+  gg_spi[[j]] <- sampled_spi[[j]] %>% 
+    ggplot(aes(x = value)) +
+    geom_boxplot() +
+    coord_cartesian(xlim = c(0, 5e4)) + # quantile(sampled_spi[[j]]$value, probs = c(0.2, 0.8)) %>% as.numeric
+    labs(x = j)
+}
+
+ggarrange(plotlist = gg_spi[c(-2, -5)]) %>% 
+  annotate_figure(top = "Boxplot of Sampled SPI for Various Species",
+                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+
+```{r fig.height=6, eval = FALSE}
+# set.seed(123)
+gg <- list()
+cvm <- numeric()
+ad <- numeric()
+t_shape <- list()
+samples <- list()
+
+for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Total")){
+  errors <- data_transformed %>% 
+    select(!!sym(j), trap, timestamp) %>% 
+    pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
+    setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+    mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
+                          rowSums(.[2:4], na.rm = TRUE) / 3, 
+                          NA_real_)) %>% 
+    mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. - mean)) %>% 
+    pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap")
+  
+  sd <- sd(errors$error, na.rm = TRUE)
+  e <- simpleError("test error")
+  t_shape[[j]] <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
+  # t_shape <- QRM::fit.mst(errors$error, method = "Brent", upper = 2, lower = 1, nit = 2000, tol = 1e-10) # https://magesblog.com/post/2013-03-12-how-to-use-optim-in-r/ or here https://stat.ethz.ch/R-manual/R-devel/library/stats/html/optim.html
+  if (class(t_shape[[j]]) != "try-error"){
+    m <- t_shape[[j]]$par.ests[2]
+    s <- t_shape[[j]]$par.ests[3]
+    df <- t_shape[[j]]$par.ests[1]
+    t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s) # See here for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
+    
+    # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
+    
+    for (i in 1:1) {
+      cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+      ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+      
+      cvm[i] <- cvm_test$p.value
+      ad[i] <- ad_test$p.value
+    }
+    
+    cvm <- mean(cvm)
+    ad <- mean(ad)
+  }
+  
+  samples[[j]] <- rt(10000, df = df) * s + m # This gives us 10k random samples for the absolute log-differences from the mean. See here again for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
   
   gg[[j]] <- errors %>%
     ggplot(aes(x=error, y = ..density..)) +
@@ -1228,7 +1350,7 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
 }
 
 
-ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol = 2) %>% 
+ggarrange(plotlist = gg, nrow = 3, ncol = 2) %>% 
   annotate_figure(top = "Absolute Differences from the Average Measurements of the Three Traps for Different Groups",
                   bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
 
@@ -1236,9 +1358,57 @@ ggarrange(gg[[1]], gg[[2]], gg[[3]], gg[[4]], gg[[5]], gg[[6]], nrow = 3, ncol =
 
 # Sample Blooming Season Starts and SPI with Theoretical Error Distribution
 
-```{r}
+This is investigatoy work in progress. We will take the mean values from the three traps above and then create bootstrap samples for the divergence from the mean. Based on these samples we will investigate the spread of the SPI and the Start of the Blooming Season; two metrics highly relevant for Pollen prediction. This analysis will be carried out on the most robust (i.e. daily-averages) values.
 
-t_shape %>% str
+```{r fig.height=9, eval = FALSE}
+
+# The sampled errors from above are differences of each trap from the common mean (logarithmic).
+# To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
+
+gg_spi <- list()
+sampled_days_random <- list()
+sampled_spi <- list()
+
+for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Total")){
+  
+  # In the following we will be working with the mean values from the three traps.
+  mean_traps <- data_anova %>% 
+      select(!!sym(j), trap, timestamp) %>% 
+      pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>% 
+      setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+      mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
+                            rowSums(.[2:4], na.rm = TRUE) / 3, 
+                            NA_real_)) %>% 
+    pull(mean) %>% 
+    na.omit()
+  
+  # Now for each of these daily averages we want to estimate a spread, according to the fitted t-distribution above. This reflects the uncertainty between the three measurers. 
+  relative_differences <- exp(samples[[j]]) # Samples were generated in step above, make sure that same species were applied
+  
+  # These relative differences from the mean are sampled fractions. Basically 10000 options of what a trap could have measured for that day. Most samples should be close to the empirical common mean, but some will stray further apart. As these are relative differences from the mean, the absolute measurement error depends on the measured pollen concentration of any specific day.
+  
+  sampled_days <- map(mean_traps, ~ .x * (relative_differences))
+  
+  # Now we will pick random measurements for each of the 89 days, and see how that affects the SPI
+
+  for (i in 1:1000){
+    sampled_days_random[[i]] <- map(sampled_days, ~sample(.x, 1)) %>% flatten_dbl() %>% sum
+  }
+  
+  sampled_spi[[j]] <- sampled_days_random %>% flatten_dbl %>% as_tibble()
+  
+  gg_spi[[j]] <- sampled_spi[[j]] %>% 
+    ggplot(aes(x = value)) +
+    geom_boxplot() +
+    coord_cartesian(xlim = c(0, 8e4)) +
+    labs(x = j)
+}
+
+map(samples, ~.x %>%  summary)
+
+ggarrange(plotlist = gg_spi[], nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = "Boxplot of Sampled SPI for Various Species",
+                  bottom = text_grob("We are looking at absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
 
 ```
 
