@@ -236,6 +236,58 @@ data_hourly_comb %>%
 
 ```
 
+### Robustness of Traps and Missing Values
+
+We want to assess the similarity between traps for different temporal averages. It is known / expected that Hirst traps are not reliable for short time-windows. The statistics calculated below, are affected by too many measurements that are zero for any given time. But at the same time, we will also compare those Hirst traps to newer automatic traps with a high temporal resolution.  
+Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
+
+
+```{r results="asis"}
+
+data_aggs_comb <- list(data_hourly_comb, data_daily_comb)
+number_of_measurements_comb <- map(data_aggs_comb, ~.x %>% 
+  bind_rows %>%   
+  group_by(trap, date, hour) %>% 
+  summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+  replace(is.na(.), 0) %>% 
+  # mutate_at(vars(all_of(species_selection)), ~if_else((. >= 10), ., 0)) %>% 
+  mutate_at(vars(total), ~(as.integer(as.integer(.) != 0))) %>% 
+  ungroup %>% 
+  group_by(date, hour) %>%
+  summarise_at(vars(total), ~sum(., na.rm = TRUE)) %>% 
+  ungroup)
+
+timesteps_comb <- map(data_aggs_comb, ~ (.x %>% nrow()) / length(traps))
+
+number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_rows(.x %>% 
+    summarise_at(vars(total), ~sum(. == 4)),  
+  .x %>%                                                                     
+    summarise_at(vars(total), ~sum(. == 3)),  
+  .x %>% 
+    summarise_at(vars(total), ~sum(. == 2)),
+  .x %>% 
+    summarise_at(vars(total), ~sum(. == 1)),
+  .x %>% 
+  summarise_at(vars(total), ~sum(. == 0))
+  ) %>% 
+  mutate_at(vars(total), ~ scales::percent(. / !!.y, accuracy = 1))) %>% 
+  bind_cols %>% 
+  mutate(Comment = c("All traps measured", "Three traps measured", "Two traps measured", "One trap measured", "None measured")) %>%
+  rename("Hourly-Values" = total, "Daily-Values" = total1)
+
+number_traps_comb %>% 
+  bind_rows() %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE)
+
+# For rendering docx documents
+# NOT ALLOWED AT MCH TO EXECUTE .exe file
+# save_kable(table_traps, file = "table_traps.png")
+# webshot::install_phantomjs()
+
+ 
+
+```
 
 ```{r fig.height=10}
 # data_hourly_comb %>% 
