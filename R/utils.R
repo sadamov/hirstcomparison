@@ -190,11 +190,11 @@ plot_spi <- function(data, species, samples, n = 1000, xlim = c(0, 3.5e4)){
   # In the following we will be working with the mean values from the three traps.
 
     mean_traps <- data %>%
-      select(!!sym(species), trap, timestamp) %>%
-      pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>%
-      setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>%
+      select(!!sym(species), trap, timestamp, type) %>%
+      pivot_wider(names_from = trap, values_from = !!sym(species)) %>%
+      setNames(c("timestamp", "type", paste0("trap", c(2, 4, 8)))) %>%
       mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                            rowSums(.[2:4], na.rm = TRUE) / 3,
+                            rowSums(.[3:5], na.rm = TRUE) / 3,
                             NA_real_)) %>%
       pull(mean) %>%
       na.omit()
