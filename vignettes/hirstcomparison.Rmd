@@ -124,7 +124,12 @@ dates <- map(dates_raw, ~mutate(
   datetime = ymd_hm(paste0(X1, time)),
   datetime = datetime - hours(2), # Convert from CEST to UTC
   datetime_adj = datetime - minutes(10), # This is necessary to cope with the guidelines about hourly averages mentioned below
-  hour = hour(datetime_adj),
+  # How often is it actually the case that only a part of the three traps measured pollen at any given time:
+  # First we need to make sure that all measurements are exactly registered at 10, 20, 30, 40, 50, 0 minutes after the hour.
+  # minute(data_raw %>% bind_rows() %>% pull(datetime)) %>% unique() # It's always plus one to fix it if necessary at all.
+  datetime_adj = if_else(minute(datetime_adj) %% 10 != 0, datetime_adj + minutes(1), datetime_adj),
+  hour = hour(datetime_adj) + 1,
+  hour = if_else(hour == 24, 0, hour),
   date = date(datetime_adj)) %>% 
   select(datetime, date, hour)
   )
@@ -199,20 +204,8 @@ For now we leave these measurements as NA and will not plot them nor impute valu
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
 # It's probably better to work with full days only, so that each measurement independet of the aggregation window has the same meaning
-data_raw <- map(data_raw, ~.x %>% filter(datetime > as_datetime("2013-04-01 23:00:00"),
-                                         datetime <= as_datetime("2013-06-29 23:00:00"))) 
-```
-
-
-```{r}
-# How often is it actually the case that only a part of the three traps measured pollen at any given time:
-# First we need to make sure that all measurements are exactly registered at 10, 20, 30, 40, 50, 0 minutes after the hour.
-
-data_raw <- map(data_raw, ~.x %>% 
-  mutate(datetime = if_else(minute(datetime) %% 10 != 0, datetime + minutes(1), datetime)))
-  
-# minute(data_raw %>% bind_rows() %>% pull(datetime)) %>% unique() # It's always plus one to fix it if necessary at all.
-
+data_raw <- map(data_raw, ~.x %>% filter(datetime > as_datetime("2013-04-02 00:00:00"),
+                                         datetime <= as_datetime("2013-06-30 00:00:00"))) 
 ```
 
 We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison). This is of course a deliberate choice, it was not the goal of the study to see how often all traps measured zero pollen. Everything strongly depends on this decision and the data preparation should be adjusted if other statistical questions are being evaluated.
@@ -329,23 +322,29 @@ We should apply the same setting to NA as above for all averages. But AFTER the 
 
 # Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
 data_hourly_raw <- map(data_raw, ~.x %>% 
+  mutate(date = if_else(hour == 0, date + days(1), date)) %>%  # This way they will be allocated to the next day)
   group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
 
 data_hourly <- set_na(data_hourly_raw)
+data_hourly_raw[[1]]
+data_hours12[[1]]
+data_raw[[1]] %>% select(datetime, date, hour)
 
 data_hours3_raw <- map(data_raw, ~.x %>% 
-  mutate(hour = case_when(
-    hour >= 0 & hour < 3 ~ 3,
-    hour >= 3 & hour < 6 ~ 6,
-    hour >= 6 & hour < 9 ~ 9,
-    hour >= 9 & hour < 12 ~ 12,
-    hour >= 12 & hour < 15 ~ 15,
-    hour >= 15 & hour < 18 ~ 18,
-    hour >= 18 & hour < 21 ~ 21,
-    hour >= 21 & hour < 24 ~ 0 # For the next day already
-    )
+  mutate(hms = format(datetime, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "03:00:00" ~ 3,
+      hms > "03:00:00" & hms <= "06:00:00" ~ 6,
+      hms > "06:00:00" & hms <= "09:00:00" ~ 9,
+      hms > "09:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" & hms <= "15:00:00" ~ 15,
+      hms > "15:00:00" & hms <= "18:00:00" ~ 18,
+      hms > "18:00:00" & hms <= "21:00:00" ~ 21,
+      hms > "21:00:00" | hms == "00:00:00" ~ 0 # For the next day already
+      ),
+    date = if_else(hour == 0, date + days(1), date) # This way they will be allocated to the next day
   ) %>% 
   group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
@@ -354,12 +353,14 @@ data_hours3_raw <- map(data_raw, ~.x %>%
 data_hours3 <- set_na(data_hours3_raw)
 
 data_hours6_raw <- map(data_raw, ~.x %>% 
-  mutate(hour = case_when(
-    hour >= 0 & hour < 6 ~ 6,
-    hour >= 6 & hour < 12 ~ 12,
-    hour >= 12 & hour < 18 ~ 18,
-    hour >= 18 & hour < 24 ~ 0
-    )
+  mutate(hms = format(datetime, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "06:00:00" ~ 6,
+      hms > "06:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" & hms <= "18:00:00" ~ 18,
+      hms > "18:00:00" | hms == "00:00:00" ~ 0
+    ),
+    date = if_else(hour == 0, date + days(1), date)
   ) %>% 
   group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
@@ -368,11 +369,13 @@ data_hours6_raw <- map(data_raw, ~.x %>%
 data_hours6 <- set_na(data_hours6_raw)
 
 data_hours12_raw <- map(data_raw, ~.x %>% 
-  mutate(hour = case_when(
-    hour >= 0 & hour < 12 ~ 12,
-    hour >= 12 & hour < 24 ~ 0
-    )
-  ) %>% 
+  mutate(hms = format(datetime, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" | hms == "00:00:00" ~ 0
+    ),
+    date = if_else(hour == 0, date + days(1), date)
+  )  %>% 
   group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
@@ -380,12 +383,13 @@ data_hours12_raw <- map(data_raw, ~.x %>%
 data_hours12 <- set_na(data_hours12_raw)
 
 data_daily_raw <- map(data_hourly_raw, ~.x %>% 
+                    mutate(date = if_else(hour == 0, date - days(1), date)) %>% 
                     group_by(date, trap, line) %>% 
                     summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-                    mutate(hour = 24) %>% 
+                    mutate(hour = 23) %>% # Random hour here 
                     ungroup())
 
-data_daily <- set_na(data_daily_raw)
+data_daily[[1]] <- set_na(data_daily_raw)
 
 data_daily_raw <- map(data_daily_raw, ~.x %>% 
   mutate(hour = paste0(sprintf("%02d", 23), ":59"),
