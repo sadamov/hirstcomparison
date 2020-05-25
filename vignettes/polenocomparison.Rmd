@@ -11,12 +11,14 @@ output:
   word_document: default
 ---
 
+# Setup
+
 ```{r}
-##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
+##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLUTION HERE #####
 
 species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
-resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
-traps = c("poleno2", "poleno4", "poleno5", "hirst")
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst")
 
 ```
 
@@ -44,7 +46,7 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
-library(ggthemr)
+# library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -65,8 +67,11 @@ ggthemr("fresh")
 
 ```
 
-```{r cache = TRUE, cache.lazy = FALSE}
+# Data
 
+## Import
+
+```{r cache = TRUE, cache.lazy = FALSE}
 path_data <- paste0(here::here(), "/ext-data/")
 files_data <- list.files(path_data, pattern = "raw_data")
 
@@ -81,16 +86,16 @@ names[1] <- "id1"
 names[10] <- "id2"
 names[16] <- "contextVersionId2"
 
-data_poleno <- map2(data_raw_poleno, 1:3, ~.x %>% 
+data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>% 
   setNames(names) %>% 
   select(classLabel, timestamp) %>% 
   mutate(timestamp = as_datetime(timestamp),
          classLabel = as_factor(classLabel),
          date = date(timestamp),
-         hour = hour(timestamp),
+         hour = hour(timestamp) + 1,
          trap = paste0("poleno", .y)) %>% 
   filter(timestamp > ymd_hms("2020-02-19 00:00:00"),
-         timestamp <= ymd_hms("2020-05-03 23:59:59")))
+         timestamp <= ymd_hms("2020-05-03 23:00:00")))
 
 # data_raw_poleno[[1]] %>% summary
 # summary(data_poleno[[1]])
@@ -98,23 +103,45 @@ data_poleno <- map2(data_raw_poleno, 1:3, ~.x %>%
 # head(data, 200)
 
 # Device_idDevice, deviceVersion, valid have the same values for all observations
-# The three timestamps are merely seconds apart. For now I simply decided to use one of them. All of them are in agreement with the eventBaseName. 
+# The three timestamps are merely seconds apart. For now I simply decided to use one of them. All of them are in agreement with the eventBaseName.
+```
+
+
+```{r cache = TRUE, cache.lazy = FALSE}
+# We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
+# We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
+
+files_hirst <- list.files(path_data, pattern = "dwh.csv")
+
+data_hirst_raw <- data.table::fread(paste0(path_data, files_hirst)) %>% 
+  as_tibble() %>% 
+  select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
+  mutate(timestamp = dmy_hm(timestamp)) %>% 
+  filter(timestamp > ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
+         timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
+  mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
 
 ```
 
+## Imputation / Missing
 
 ```{r}
 
 # Hour 1 represents the duration 00:00:01 - 01:00:00, and same for all hours up to 24
-data_poleno_hourly <- map2(data_poleno, c(2, 4, 5), ~.x %>% 
+data_poleno_hourly <- map(data_poleno,  ~.x %>% 
   group_by(date, hour, trap) %>% 
   summarise(total = as.integer(n())) %>% 
   ungroup() %>% 
-  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00"))) %>% 
-  padr::pad(by = "timestamp") %>%  # This will populate missing hours with zeros where no pollen were measured (actually very few)
-  mutate(date = date(timestamp), 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), # Here we convert the 24th hour into hour zero of the next day
+         date = date(timestamp),
+         hour = hour(timestamp)) %>% 
+  padr::pad(by = "timestamp")) # This will populate missing hours with zeros where no pollen were measured (actually very few hours)
+  
+data_poleno_hourly <- map2(data_poleno_hourly, c(2, 4, 5), ~.x %>% 
+  mutate(total = if_else(is.na(total), 0L, total),
+         date = date(timestamp),
          hour = hour(timestamp),
-         trap = paste0("poleno", .y)))
+         trap = paste0("poleno", .y))) # Padding introduced 119 NAs, the traps were functioning during that hour, there were simply no pollen measured (at least there is no indication or report of malfunction)
 
 data_poleno_hourly %>%
   bind_rows() %>% 
@@ -122,53 +149,39 @@ data_poleno_hourly %>%
   as.data.frame() %>% 
   Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Poleno Traps")
 
-data_poleno_hourly <- map(data_poleno_hourly, ~.x %>% 
-  mutate(total = if_else(is.na(total), 0L, total))) # Padding introduced 119 NAs, the traps were functioning during that hour, there were simply no pollen measured.
+
 
 ```
 
 ```{r}
 
-# We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
-# We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
-
-files_hirst <- list.files(path_data, pattern = "dwh.csv")
-
-data_hirst <- data.table::fread(paste0(path_data, files_hirst)) %>% 
-  as_tibble() %>% 
-  select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% 
-  mutate(timestamp = dmy_hm(timestamp)) %>% 
-  filter(timestamp >= ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
-         timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
-  mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
-  
-data_hirst %>% filter(is.na(khzeamh0))
-
-data_hirst %>% 
+data_hirst_raw %>% 
   arrange(timestamp) %>% 
   as.data.frame() %>% 
   Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Hirst Trap from DWH")
 
-data_hirst <- data_hirst %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
-  # mutate_at(vars(khambrh0:khzeamh0), ~ if_else(is.na(.), 0, .)) %>% # The NAs are actual NAs here and we are currently waiting for the values.
+data_hirst <- data_hirst_raw %>% 
   mutate(date = date(timestamp),
          hour = hour(timestamp),
          trap = "hirst",
          total = rowSums(select(., -timestamp))) %>%
   select(timestamp, date, hour, trap, total)
- 
+
+missing_hirst <- data_hirst %>% filter(is.na(total)) %>% pull(timestamp) # The NAs are actual NAs here, during timeslots when the pollen rubber bands were exchanged.
 
 ```
 
 ```{r }
 
-data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(min(data_hirst$total, na.rm = TRUE), max(data_hirst$total, na.rm = TRUE))))
+data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
 data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
+data_hirst_scaled <- scales::rescale(data_hirst$total, c(0, 100))
+data_hirst <- data_hirst %>% 
+  mutate(total = data_hirst_scaled)
 
 data_hourly_comb_raw <- data_poleno_hourly %>% 
   bind_rows %>% 
   bind_rows(data_hirst) 
-
 ```
 
 ```{r}
@@ -200,29 +213,20 @@ data_hourly_comb <- data_hourly_comb_raw %>%
                         between(timestamp, ymd_h("2020-04-23 11"), ymd_h("2020-04-23 14")) | # Those were all calibration events
                         between(timestamp, ymd_h("2020-03-16 08"), ymd_h("2020-03-16 10")) | # This is a Tube Cleaning Event outside calibration
                         between(timestamp, ymd_h("2020-03-23 08"), ymd_h("2020-03-23 10")) | # During these time the Hirst trap had NAs, 
-                        between(timestamp, ymd_h("2020-04-14 08"), ymd_h("2020-04-21 05")) | # THESE VALUES ARE DELAYED DUE TO CORONA AND EASTER, PLEASE WAIT :-)
-                        timestamp == ymd_h("2020-02-24 07") | # probably because the silicon band was being exchanged.
-                        timestamp == ymd_h("2020-04-27 07"),  # Probably worth checking though with Payerne
+                        timestamp %in% missing_hirst, # probably because the silicon band was being exchanged.
                         0, total)) %>% 
-  group_by(timestamp) %>%
+  group_by(timestamp) %>% 
   mutate_at(vars(total), function(x){
-      if(all(as.integer(x) == 0))
+      if(all(x == 0))
         return(NA) # This will set all measurements to NA if no trap measured any pollen. With Poleno there is always a measurement during the blooming season. That means that all NAs were introduced only because of the calibration events filtered out above.
       else
         return(x)
   }) %>% 
   ungroup()
 
-
-data_hourly %>% 
-  ggplot(aes(x = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), y = count)) +
-  geom_line() +
-  ggtitle("Poleno-2: Hourly Total Pollen Counts") +
-  labs(x = "Date") +
-  geom_label(label = paste0("Number of Rows: \n", nrow(data)), mapping = aes(x = as_datetime("2020-03-01 01:00:00"), y = 9000))
-
 ```
 
+## Aggregation
 
 ```{r}
 
@@ -246,7 +250,7 @@ data_hourly_comb %>%
 
 ```
 
-### Robustness of Traps and Missing Values
+## Robustness of Traps / Simultaneous Measurements
 
 We want to assess the similarity between traps for different temporal averages. It is known / expected that Hirst traps are not reliable for short time-windows. The statistics calculated below, are affected by too many measurements that are zero for any given time. But at the same time, we will also compare those Hirst traps to newer automatic traps with a high temporal resolution.  
 Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
@@ -299,12 +303,14 @@ number_traps_comb %>%
 
 ```
 
+# Visualization
+
 ```{r fig.height=10}
-# data_hourly_comb %>% 
-#   ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
-#   geom_line() +
-#   ggtitle("Hourly Total Pollen Counts") +
-#   labs(x = "Date")
+data_hourly_comb %>%
+  ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
+  geom_line() +
+  ggtitle("Hourly Total Pollen Counts") +
+  labs(x = "Date")
 
 plot_comb(resolution = resolution, traps, rm_zeros = TRUE)
 
@@ -426,7 +432,7 @@ for (i in 1:ncol(traps_pairs)){
   geom_smooth(alpha = 0.1, method = "loess") +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
   geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = 3.6, y = 9)) +
-  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
+  coord_cartesian(ylim = c(0, 5), xlim = c(0, 5))
   
 }
 
@@ -472,7 +478,7 @@ for (i in 1:ncol(traps_pairs)) {
   gg_ab[[i]] <- data_altman %>% 
     ggplot(aes(x = !!sym(paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")")), y = !!sym(paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")")))) +
     geom_point(alpha = 0.5) +
-    coord_cartesian(xlim = c(0, 10), ylim = c(-sd_diff[i] * 5, sd_diff[i] * 5)) +  
+    coord_cartesian(xlim = c(0, 5), ylim = c(-sd_diff[i] * 5, sd_diff[i] * 5)) +  
     geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
     geom_abline(slope = 0, intercept = sd_diff[i] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
     geom_abline(slope = 0, intercept = sd_diff[i] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -504,7 +510,7 @@ gg_hist %>%
 
 ```{r}
  data_altman %>% 
-  filter(abs(`diff(poleno2 - poleno5)`) > 3) %>% 
+  filter(abs(`diff(poleno2 - poleno5)`) > 1) %>% 
   ggplot()+
   geom_histogram(aes(x = timestamp), bins = 50) 
 ```
@@ -578,14 +584,14 @@ The Tukey-Anscombe plot plots the residuals vs. the fitted values. It allows us 
 
 gg_tukey1 <- tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
   ggplot(aes(x = fitted, y = resid)) +
-  geom_point(alpha = 0.5, position = position_jitter(width = 5, height = 0)) +
+  geom_point(alpha = 0.4, position = position_jitter(width = 5, height = 0)) +
   # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
   geom_abline(slope = 0, intercept = 0, col = swatch()[3])
 
 gg_tukey2 <- 
   tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
     ggplot(aes(x = fitted, y = resid)) +
-    geom_point(alpha = 0.5, position = position_jitter(width = 0.01, height = 0)) +
+    geom_point(alpha = 0.4, position = position_jitter(width = 0.01, height = 0)) +
     # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
     geom_abline(slope = 0, intercept = 0, col = swatch()[3])
 
@@ -791,7 +797,7 @@ When using classic estimation methods, even one such outlier might inflate the b
 
 Currently, there are two different methods available for fitting models. They only differ in how the consistency factors for the Design Adaptive Scale estimates are computed. Available fitting methods for theta and sigma. DAStau (default): For this method, the consistency factors are computed using numerical quadrature. This is slower but yields more accurate results. This is the direct analogue to the DAS-estimate in robust linear regression.
 
-```{r}
+```{r eval = FALSE}
 fit_rlmer <- rlmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
 summary(fit_rlmer)
 
@@ -812,32 +818,25 @@ In this first section we compare relative and absolute differences from the mean
 ```{r warning=FALSE}
 
 errors <- data_corr %>% 
-  mutate(exclude = rowSums(is.na(data_corr)) < 3, # At least one trap should have measured something otherise we are not calculating the means
+  mutate(exclude = rowSums(is.na(data_corr)) < length(traps), # At least one trap should have measured something otherise we are not calculating the means
     mean = if_else(exclude,
-                   rowSums(.[2:ncol(traps_pairs)], na.rm = TRUE) / ncol(traps_pairs), 
+                   rowSums(.[2:length(traps) + 1], na.rm = TRUE) / ncol(traps_pairs), 
                    NA_real_)) %>% 
   na.omit() %>% 
   mutate_at(vars(all_of(traps)), ~(. - mean)) %>% 
-  pivot_longer(cols = 2:(1 + ncol(traps_pairs)), values_to = "error", names_to = "trap") %>% 
+  pivot_longer(cols = 2:(1 + length(traps)), values_to = "error", names_to = "trap") %>% 
   mutate(error_rel = error / mean) %>% 
   select(-mean, -exclude)
 
 sd(errors$error, na.rm = TRUE)
-sd(errors$erro_rel[!is.na(errors$error_rel) & errors$error_rel < Inf]) # Those were introduced above by dividing by zero
 
 x <- seq(-2.5, 2.5, length.out = 10000)
-t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
+t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(errors$error[!is.na(errors$error)]) #leads to same result without warning
 
 m <- t_shape$estimate[1]
 s <- t_shape$estimate[2]
 df <- t_shape$estimate[3]
 t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
-
-t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel) & errors$error_rel < Inf], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
-m_rel <- t_shape_rel$estimate[1]
-s_rel <- t_shape_rel$estimate[2]
-df_rel <- t_shape_rel$estimate[3]
-t_errors_rel <- tibble(x = x, y = dt((x - m_rel) / s_rel, df = df_rel) / s_rel)
 
 gg_t_abs <- errors %>%
   ggplot(aes(x=error, y = ..density..)) +
@@ -847,15 +846,7 @@ gg_t_abs <- errors %>%
   geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
   coord_cartesian(xlim = c(-5, 5))
 
-gg_t_rel <- errors %>%
-  ggplot(aes(x=error_rel, y = ..density..)) +
-  geom_histogram(bins= 100) +
-  geom_density(col = swatch()[4]) +
-  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
-  geom_line(data = t_errors_rel, aes(x = x, y = y), col = swatch()[6]) +
-  coord_cartesian(xlim = c(-2, 2))
-
-ggarrange(gg_t_abs, gg_t_rel, nrow = 2) %>% 
+ggarrange(gg_t_abs) %>% 
   annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
                   bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n At the bottom the relative differences from the mean.", color = swatch()[1], face = "italic", size = 10))
 

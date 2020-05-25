@@ -155,15 +155,15 @@ plot_comb <- function(resolution, traps, rm_zeros){
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    coord_cartesian(ylim = c(0, 600)) +
+    coord_cartesian(ylim = c(0, 50)) +
     labs(y = "Mean Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
     ggplot() +
-    geom_histogram(aes(y = total, fill = trap), binwidth = 10, alpha = alpha) +
+    geom_histogram(aes(y = total, fill = trap), binwidth = 1, alpha = alpha) +
     facet_wrap(vars(trap), ncol = 1) +
     theme(legend.position = "bottom") +
-    coord_flip(ylim = c(0, 500)) +
+    coord_flip(ylim = c(0, 30)) +
     labs(x = "Occurence of Pollen Concentrations", y = "Mean Conc. [#Pollen/m³]")
 
   ggarrange(ggarrange(gg1, gg2, nrow = 2), gg3) %>%
