@@ -35,6 +35,7 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
+library(ggthemr)
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -96,12 +97,18 @@ head(data, 200)
 
 ```{r}
 
+
+
+```
+
+
+```{r}
+
 # Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
 data_hourly <- data %>% 
   group_by(date, hour, trap) %>% 
   summarise(count = n()) %>% 
   ungroup()
-
 
 data_hourly %>% 
   ggplot(aes(x = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), y = count)) +
