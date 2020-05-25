@@ -5,11 +5,20 @@ author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 always_allow_html: TRUE
 output:
-  word_document: default
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 ---
+
+```{r}
+##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
+
+species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
+resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+traps = c("poleno2", "poleno4", "poleno5", "hirst")
+
+```
 
 
 ```{r include=FALSE}
@@ -56,59 +65,154 @@ ggthemr("fresh")
 
 ```
 
-```{r cache = TRUE}
+```{r cache = TRUE, cache.lazy = FALSE}
 
 path_data <- paste0(here::here(), "/ext-data/")
 files_data <- list.files(path_data, pattern = "raw_data")
 
-data_raw <-
+data_raw_poleno <-
   map(files_data, ~ data.table::fread(paste0(path_data, .x))) %>% 
   setNames(files_data)
 
-names <- names(data_raw[[1]])
+names <- names(data_raw_poleno[[1]])
 names[3] <- "timestamp1"
 names[12] <- "timestamp2"
 names[1] <- "id1"
 names[10] <- "id2"
 names[16] <- "contextVersionId2"
 
-sort(names)
-
-data <- data_raw[[1]] %>% 
+data_poleno <- map2(data_raw_poleno, 1:3, ~.x %>% 
   setNames(names) %>% 
   select(classLabel, timestamp) %>% 
   mutate(timestamp = as_datetime(timestamp),
          classLabel = as_factor(classLabel),
          date = date(timestamp),
-         hour = hour(timestamp) + 1,
-         trap = "poleno") %>% 
-  rowid_to_column("id")
+         hour = hour(timestamp),
+         trap = paste0("poleno", .y)) %>% 
+  filter(timestamp > ymd_hms("2020-02-19 00:00:00"),
+         timestamp <= ymd_hms("2020-05-03 23:59:59")))
 
-
-
-summary(data)
-glimpse(data)
-head(data, 200)
+# data_raw_poleno[[1]] %>% summary
+# summary(data_poleno[[1]])
+# glimpse(data)
+# head(data, 200)
 
 # Device_idDevice, deviceVersion, valid have the same values for all observations
 # The three timestamps are merely seconds apart. For now I simply decided to use one of them. All of them are in agreement with the eventBaseName. 
 
 ```
 
+
 ```{r}
 
+# Hour 1 represents the duration 00:00:01 - 01:00:00, and same for all hours up to 24
+data_poleno_hourly <- map2(data_poleno, c(2, 4, 5), ~.x %>% 
+  group_by(date, hour, trap) %>% 
+  summarise(total = as.integer(n())) %>% 
+  ungroup() %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00"))) %>% 
+  padr::pad(by = "timestamp") %>%  # This will populate missing hours with zeros where no pollen were measured (actually very few)
+  mutate(date = date(timestamp), 
+         hour = hour(timestamp),
+         trap = paste0("poleno", .y)))
 
+data_poleno_hourly %>%
+  bind_rows() %>% 
+  pivot_wider(names_from = trap, values_from = total) %>% 
+  as.data.frame() %>% 
+  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Poleno Traps")
+
+data_poleno_hourly <- map(data_poleno_hourly, ~.x %>% 
+  mutate(total = if_else(is.na(total), 0L, total))) # Padding introduced 119 NAs, the traps were functioning during that hour, there were simply no pollen measured.
 
 ```
 
-
 ```{r}
 
-# Hour 1 represents the duration 00:10 - 01:00, and same for all hours up to 24
-data_hourly <- data %>% 
-  group_by(date, hour, trap) %>% 
-  summarise(count = n()) %>% 
+# We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
+# We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
+
+files_hirst <- list.files(path_data, pattern = "dwh.csv")
+
+data_hirst <- data.table::fread(paste0(path_data, files_hirst)) %>% 
+  as_tibble() %>% 
+  select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% 
+  mutate(timestamp = dmy_hm(timestamp)) %>% 
+  filter(timestamp >= ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
+         timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
+  mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
+  
+data_hirst %>% filter(is.na(khzeamh0))
+
+data_hirst %>% 
+  arrange(timestamp) %>% 
+  as.data.frame() %>% 
+  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Hirst Trap from DWH")
+
+data_hirst <- data_hirst %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
+  # mutate_at(vars(khambrh0:khzeamh0), ~ if_else(is.na(.), 0, .)) %>% # The NAs are actual NAs here and we are currently waiting for the values.
+  mutate(date = date(timestamp),
+         hour = hour(timestamp),
+         trap = "hirst",
+         total = rowSums(select(., -timestamp))) %>%
+  select(timestamp, date, hour, trap, total)
+ 
+
+```
+
+```{r }
+
+data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(min(data_hirst$total, na.rm = TRUE), max(data_hirst$total, na.rm = TRUE))))
+data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
+
+data_hourly_comb_raw <- data_poleno_hourly %>% 
+  bind_rows %>% 
+  bind_rows(data_hirst) 
+
+```
+
+```{r}
+# Calibration was carried out on the Poleno traps during specific time slots (see: https://docs.google.com/document/d/1Eyy7G7D_f_FkovU7Ui_f3e8nbrHRF3GXKJXkU-_JPYQ/edit#) (in UTC?)
+# Those times have to be filtered for at least that specific trap. But, as we will compare traps with each other, it's safest to remove those times from all traps. As we are comparing with hourl averages from Hirst we should probably remove the full hours during which calibration was carried out. Our time series expands from the 15.2.2020 until the 3.5.2020
+
+# Für die Kalibration wird ein «Atomizer» (https://swisens.ch/products/atomizer/) auf den Einlass gesteckt welcher nur die zu kalibrierenden Pollen ins Gerät befördert. Also eine Art Laborbedingung im Feld. Das Gerät misst während der Kalibration nichts was in der realen Welt (und bei den anderen zwei Geräten) rumfliegt.
+
+data_hourly_comb <- data_hourly_comb_raw %>% 
+  mutate(total = if_else(between(timestamp, ymd_h("2020-02-18 08"), ymd_h("2020-02-18 16")) |
+                        between(timestamp, ymd_h("2020-02-20 14"), ymd_h("2020-02-20 19")) |
+                        between(timestamp, ymd_h("2020-02-21 08"), ymd_h("2020-02-21 16")) |
+                        between(timestamp, ymd_h("2020-02-25 10"), ymd_h("2020-02-25 16")) |
+                        between(timestamp, ymd_h("2020-03-04 13"), ymd_h("2020-03-04 16")) |
+                        between(timestamp, ymd_h("2020-03-11 13"), ymd_h("2020-03-11 16")) |
+                        between(timestamp, ymd_h("2020-03-17 09"), ymd_h("2020-03-17 12")) |
+                        between(timestamp, ymd_h("2020-03-18 13"), ymd_h("2020-03-18 17")) |
+                        between(timestamp, ymd_h("2020-03-19 13"), ymd_h("2020-03-19 17")) |
+                        between(timestamp, ymd_h("2020-03-20 13"), ymd_h("2020-03-20 16")) |
+                        between(timestamp, ymd_h("2020-03-27 10"), ymd_h("2020-03-27 12")) |
+                        between(timestamp, ymd_h("2020-03-30 07"), ymd_h("2020-03-30 10")) |
+                        between(timestamp, ymd_h("2020-04-02 14"), ymd_h("2020-04-02 16")) |
+                        between(timestamp, ymd_h("2020-04-06 11"), ymd_h("2020-04-06 17")) | # Extended by two hours until 17pm to cover the tube cleaning
+                        between(timestamp, ymd_h("2020-04-07 12"), ymd_h("2020-04-07 15")) |
+                        between(timestamp, ymd_h("2020-04-13 13"), ymd_h("2020-04-13 16")) |
+                        between(timestamp, ymd_h("2020-04-17 07"), ymd_h("2020-04-17 10")) |
+                        between(timestamp, ymd_h("2020-04-21 06"), ymd_h("2020-04-21 09")) |
+                        between(timestamp, ymd_h("2020-04-21 14"), ymd_h("2020-04-21 17")) |
+                        between(timestamp, ymd_h("2020-04-23 11"), ymd_h("2020-04-23 14")) | # Those were all calibration events
+                        between(timestamp, ymd_h("2020-03-16 08"), ymd_h("2020-03-16 10")) | # This is a Tube Cleaning Event outside calibration
+                        between(timestamp, ymd_h("2020-03-23 08"), ymd_h("2020-03-23 10")) | # During these time the Hirst trap had NAs, 
+                        between(timestamp, ymd_h("2020-04-14 08"), ymd_h("2020-04-21 05")) | # THESE VALUES ARE DELAYED DUE TO CORONA AND EASTER, PLEASE WAIT :-)
+                        timestamp == ymd_h("2020-02-24 07") | # probably because the silicon band was being exchanged.
+                        timestamp == ymd_h("2020-04-27 07"),  # Probably worth checking though with Payerne
+                        0, total)) %>% 
+  group_by(timestamp) %>%
+  mutate_at(vars(total), function(x){
+      if(all(as.integer(x) == 0))
+        return(NA) # This will set all measurements to NA if no trap measured any pollen. With Poleno there is always a measurement during the blooming season. That means that all NAs were introduced only because of the calibration events filtered out above.
+      else
+        return(x)
+  }) %>% 
   ungroup()
+
 
 data_hourly %>% 
   ggplot(aes(x = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), y = count)) +
@@ -117,6 +221,690 @@ data_hourly %>%
   labs(x = "Date") +
   geom_label(label = paste0("Number of Rows: \n", nrow(data)), mapping = aes(x = as_datetime("2020-03-01 01:00:00"), y = 9000))
 
+```
+
+
+```{r}
+
+data_daily_comb <- data_hourly_comb %>% 
+                    group_by(date, trap) %>% 
+                    summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+                    mutate(hour = "12:00",
+                           timestamp = date) %>% 
+                    ungroup()
+
+
+```
+
+```{r fig.height=10}
+data_hourly_comb %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species)) %>% 
+  arrange(timestamp) %>% 
+  as.data.frame() %>% 
+  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for All Traps")
+  
+
+```
+
+### Robustness of Traps and Missing Values
+
+We want to assess the similarity between traps for different temporal averages. It is known / expected that Hirst traps are not reliable for short time-windows. The statistics calculated below, are affected by too many measurements that are zero for any given time. But at the same time, we will also compare those Hirst traps to newer automatic traps with a high temporal resolution.  
+Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
+
+
+```{r results="asis"}
+
+data_aggs_comb <- list(data_hourly_comb, data_daily_comb)
+number_of_measurements_comb <- map(data_aggs_comb, ~.x %>% 
+  bind_rows %>%   
+  group_by(trap, date, hour) %>% 
+  summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+  replace(is.na(.), 0) %>% 
+  # mutate_at(vars(all_of(species_selection)), ~if_else((. >= 10), ., 0)) %>% 
+  mutate_at(vars(total), ~(as.integer(as.integer(.) != 0))) %>% 
+  ungroup %>% 
+  group_by(date, hour) %>%
+  summarise_at(vars(total), ~sum(., na.rm = TRUE)) %>% 
+  ungroup)
+
+timesteps_comb <- map(data_aggs_comb, ~ (.x %>% nrow()) / length(traps))
+
+number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_rows(.x %>% 
+    summarise_at(vars(total), ~sum(. == 4)),  
+  .x %>%                                                                     
+    summarise_at(vars(total), ~sum(. == 3)),  
+  .x %>% 
+    summarise_at(vars(total), ~sum(. == 2)),
+  .x %>% 
+    summarise_at(vars(total), ~sum(. == 1)),
+  .x %>% 
+  summarise_at(vars(total), ~sum(. == 0))
+  ) %>% 
+  mutate_at(vars(total), ~ scales::percent(. / !!.y, accuracy = 1))) %>% 
+  bind_cols %>% 
+  mutate(Comment = c("All traps measured", "Three traps measured", "Two traps measured", "One trap measured", "None measured")) %>%
+  rename("Hourly-Values" = total, "Daily-Values" = total1)
+
+number_traps_comb %>% 
+  bind_rows() %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE)
+
+# For rendering docx documents
+# NOT ALLOWED AT MCH TO EXECUTE .exe file
+# save_kable(table_traps, file = "table_traps.png")
+# webshot::install_phantomjs()
+
+ 
+
+```
+
+```{r fig.height=10}
+# data_hourly_comb %>% 
+#   ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
+#   geom_line() +
+#   ggtitle("Hourly Total Pollen Counts") +
+#   labs(x = "Date")
+
+plot_comb(resolution = resolution, traps, rm_zeros = TRUE)
+
+```
+
+
+
+# Statistical Comparison
+
+The analysis should also serve as a base for a scientific publication. We want to assess the robustness and similarity of the Hirst traps. For that purpose we will compare the measured Pollen concentrations for the three different traps. We will assess the similarity between the three traps and test their robustness for different averaging windows. This task of comparing measures has been discussed in scientific literature for many decades and it is not an easy task. I will apply many different approaches to visually and mathematically check the similarity between the three measurements and will add some remarks about their pros, cons and underlying assumptions.. It is in the nature of the problem that no conclusion will be made at the end that holds with a 100% certainty. 
+
+Another goal of this analysis is to set up a pipeline (i.e. code construct) that can be sued to compare newer automatic pollen traps to the traditional Hirst traps. For that reason I try to keep the code as flexible and well structured as possible.
+
+These settings are crucial and should always be remembered when running the chunks below:
+
+- The temporal resolution for the calculation of the mean concentrations
+- The species or group of Pollen concentrations, to distinguish between high and low blooming season
+- The threshold below which Pollen measurements are set to NA (because they become unreliable) is set to 0 currently
+
+We will first visually evaluate the similarity using Altman-Bland and Correlation Plots and then carry out some statistical tests.
+There are two pathways to evaluate the similarity of the measurements between the traps (measures). One can either transform the measurements (log), so that they are normally distributed and then work with ANOVA, F-Test and Tukey Honestly Significance Difference (HSD); or one can take the measurements as is (counts per m³) and work with the non-parametric Kruskal-Wallis Test that only requires rank-symmetry but doesn't assume any underlying distribution of the data. For the non-parametric contrasts multiple options present themselves that we will investigate below.
+
+```{r}
+
+if (resolution == "daily"){
+  data_anova <- data_daily_comb
+} else if (resolution == "12hour"){
+  data_anova <- data_hours12_comb
+} else if (resolution == "6hour"){
+  data_anova <- data_hours6_comb
+} else if (resolution == "3hour"){
+  data_anova <- data_hours3_comb
+} else if (resolution == "hourly"){
+  data_anova <-data_hourly_comb
+}
+
+data_anova <- data_anova %>% 
+  bind_rows() %>% 
+  filter(trap %in% traps) %>% 
+  mutate(trap = as.factor(trap)) %>% 
+  group_by(trap, timestamp) %>% 
+  summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+  # na.omit() %>% 
+  ungroup 
+
+data_transformed <- data_anova %>% 
+  mutate_at(vars(total), ~log(. + 1))
+  
+# There are various methods to deal with zeros during log transformation
+# 
+#     Add a constant value © to each value of variable then take a log transformation - i will add x + 1
+#     Impute zero value with mean. - not evaluated
+#     Take square root instead of log for transformation - does not really help much
+
+```
+
+
+## Correlation
+
+The correlation between the traps can be calculated easily and then the CI and p-values must be adjusted for multiple comparison.
+The corr-test function from the psych handily offers this functionality.
+
+Careful the correlation coefficients method have some serious shortcomings:
+
+The correlation coefficient measures linear agreement--whether the measurements go up-and-down together. Certainly, we want the measures to go up-and-down together, but the correlation coefficient itself is deficient in at least three ways as a measure of agreement. (http://www.jerrydallal.com/LHSP/compare.htm)
+
+- The correlation coefficient can be close to 1 (or equal to 1!) even when there is considerable bias between the two methods. For example, if one method gives measurements that are always 10 units higher than the other method, the correlation will be 1 exactly, but the measurements will always be 10 units apart.
+- The magnitude of the correlation coefficient is affected by the range of subjects/units studied. The correlation coefficient can be made smaller by measuring samples that are similar to each other and larger by measuring samples that are very different from each other. The magnitude of the correlation says nothing about the magnitude of the differences between the paired measurements which, when you get right down to it, is all that really matters.
+- The usual significance test involving a correlation coefficient-- whether the population value is 0--is irrelevant to the comparability problem. What is important is not merely that the correlation coefficient be different from 0. Rather, it should be close to (ideally, equal to) 1! 
+
+### Pearson, Spearman and Kendall Correlation
+
+A good summary of the methods and their shortcomings can be found here: https://www.statisticssolutions.com/correlation-Pearson-Kendall-spear man/
+
+Generally the traps show a high level of correlation / association (well above 0.5). It looks like small concentrations lead to the largest discrepancies between the traps.
+
+```{r}
+
+methods <- c("pearson", "spearman", "kendall")
+
+data_corr <- data_transformed %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
+  select(!!sym(species), trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  setNames(c("timestamp", sort(traps)))
+
+corr_matrix <- map(methods, ~corr.test(
+  data_corr %>% select(-timestamp),
+  use = "complete",
+  method = .x,
+  adjust = "holm",
+  alpha = .05,
+  ci = TRUE,
+  minlength = 5
+  ))
+
+# dummy <- map(corr_matrix, ~.x %>% print(short = FALSE))
+
+
+```
+
+```{r fig.height=10, fig.width = 14}
+
+traps_pairs <- combn(traps, 2)
+gg_corr <- list()
+
+ci <- map(corr_matrix, ~.x %>% 
+  pluck(10)) %>% # Here we find the adjusted confidence intervals
+  bind_rows() %>% 
+  round(2) %>% 
+  mutate(method = rep(methods, each = ncol(traps_pairs))) %>%  
+  mutate(ci = paste0("R-", tools::toTitleCase(method), ": ", lower.adj, " - ", upper.adj)) %>% 
+  pull(ci)
+
+for (i in 1:ncol(traps_pairs)){
+  
+  gg_corr[[i]] <- data_corr %>% 
+  ggplot(aes(x = !!sym(traps_pairs[1, i]), y = !!sym(traps_pairs[2, i]))) + 
+  geom_point(alpha = 0.3) +
+  geom_smooth(alpha = 0.1, method = "loess") +
+  geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
+  geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = 3.6, y = 9)) +
+  coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
+  
+}
+
+title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
+
+ggarrange(plotlist = gg_corr) %>%
+  annotate_figure(top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+```
+
+
+
+### Altman-Bland Plots
+
+The well established AB-method for clinical trials can be used here as well to compare the means and differences between traps. Again we see that trap 8 generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence the traps can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
+
+```{r fig.height=9}
+
+gg_ab <- list()
+
+data_altman <- data_transformed %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+    pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+    setNames(c("timestamp", sort(traps)))
+
+for (i in 1:ncol(traps_pairs)) {
+  data_altman <- data_altman %>%
+    mutate(
+      !!paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")") := if_else(
+        !is.na(!!sym(traps_pairs[1, i])) | !is.na(!!sym(traps_pairs[2, i])),
+        rowSums(.[c(grep(paste0("^", traps_pairs[1, i], "$"), names(.)), grep(paste0("^", traps_pairs[2, i], "$"), names(.)))], na.rm = TRUE) / 2,
+        NA_real_
+      ),!!paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")") := !!sym(traps_pairs[1, i]) -!!sym(traps_pairs[2, i])
+    )
+}
+
+sd_diff <- data_altman %>% 
+  select(starts_with("diff")) %>% 
+  summarise_all(~sd(., na.rm = TRUE)) %>% 
+  pivot_longer(1:ncol(traps_pairs), values_to = "sd", names_to = "dummy") %>% 
+  pull(sd)
+
+for (i in 1:ncol(traps_pairs)) {
+  gg_ab[[i]] <- data_altman %>% 
+    ggplot(aes(x = !!sym(paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")")), y = !!sym(paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")")))) +
+    geom_point(alpha = 0.5) +
+    coord_cartesian(xlim = c(0, 10), ylim = c(-sd_diff[i] * 5, sd_diff[i] * 5)) +  
+    geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
+    geom_abline(slope = 0, intercept = sd_diff[i] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
+    geom_abline(slope = 0, intercept = sd_diff[i] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
+    geom_smooth(formula = "y ~ x", alpha = 0.1, method = "loess") 
+}
+  
+title <- "Altman-Bland Plots for all Traps"
+
+ggarrange(plotlist = gg_ab) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+  
+
+```
+
+We observe that Poleno 2 is generally lower than the other traps, and Hirst is significantly higher than the Poleno traps.
+I will have a closer look at the differences between poleno 2 and poleno 5. The data shows that between March 5 and March 16 the largest differences occur. 
+
+```{r}
+
+gg_hist <- data_altman %>% 
+  filter(`diff(poleno2 - poleno5)` < -1) %>% 
+  ggplot()+
+  geom_histogram(aes(x = timestamp), bins = 50) 
+
+gg_hist %>%  
+  annotate_figure(bottom = text_grob("The largest differences occur during the first two weeks of March. According to the measurements at MCH \n  the species blooming during that period are Cupressus, Eibe, Erle, Esche, Pappel, Weide, Ulme, Hasel", color = swatch()[1], face = "italic", size = 10), top = "Main Differences Between Poleno 2 and Poleno 5")
+
+```
+
+```{r}
+ data_altman %>% 
+  filter(abs(`diff(poleno2 - poleno5)`) > 3) %>% 
+  ggplot()+
+  geom_histogram(aes(x = timestamp), bins = 50) 
+```
+
+
+## Parametric / ANOVA
+
+First we compare the traps with the traditional ANOVA approach. Statistical inference (p-values, confidence intervals, . . . ) is only valid if the model assumptions are fulfilled. So far, this means (many paragraphs are quoted from Lukas Meier ETH - Script Applied Statistics ANOVA Course):
+
+- are the errors independent?
+- are the errors normally distributed?
+- is the error variance constant?
+- do the errors have mean zero?
+
+The first assumption is most crucial (but also most difficult to check). If the independence assumption is
+violated, statistical inference can be very inaccurate. In the ANOVA setting, the last assumption is typically
+not as important compared to a regression setting, as we are typically fitting “large” models.
+
+Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmic the measured concentrations.
+
+### F-Test / Omnibus-Test
+
+We first test for an overall significance of the trap on the measurements.
+F = variation between sample means / variation within the samples. I If the P-Value is larger than 5% we don't have to assume that the Null-Hypothesis (measurements from all traps originate from the same distribution).
+We use the settings that the coefficients for the three traps add to zero.
+
+```{r}
+fit_anova <- aov(as.formula(paste(species, "~ trap")), data = data_transformed, contrasts = c("contr.sum", "contr.poly"))
+summary(fit_anova)
+
+```
+
+### Residual Analysis
+
+As mentioned above (and already applied), the residuals of the anova fit need to fulfill some assumptions that we want to check in the following.
+
+- are the errors normally distributed?
+
+In a QQ-plot we plot the empirical quantiles (“what we see in the data”) vs. the theoretical quantiles (“what
+we expect from the model”). The plot should show a more or less straight line if the distributional assumption
+is correct. By default, a standard normal distribution is the theoretical “reference distribution”.
+
+They are definitely not and we have to do some adjustments. So for the following plot we logarithmic the data to deal with the right-skewedness. The best results were achieved by first logarithmic the data and then taking the square root.
+
+```{r}
+fit_anova_raw <- aov(as.formula(paste(species, "~ trap")), data = data_anova, contrasts = c("contr.sum", "contr.poly"))
+
+gg_res1 <- tibble(residuals = residuals(fit_anova_raw, type = "pearson")) %>% 
+  ggplot(aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line()
+
+gg_res2 <- tibble(residuals = residuals(fit_anova, type = "pearson")) %>% 
+  ggplot(aes(sample = residuals)) +
+  stat_qq() +
+  stat_qq_line()
+
+ggarrange(gg_res1, gg_res2, nrow = 1) %>% 
+  annotate_figure(top = "QQ-Plot for the ANOVA Residuals With (right) and Without Logarithmizing")
+
+```
+
+
+- is the error variance constant?
+- do the errors have mean zero?
+
+The Tukey-Anscombe plot plots the residuals vs. the fitted values. It allows us to check whether the residuals have constant variance and whether the residuals have mean zero (i.e. they don’t show any deterministic pattern). We don't plot the smoothing line as loess (and other) algorithms have issues when the same value is repeated a large number of times (jitter did not really help).
+
+```{r}
+# plot(fit_anova, which = 1)
+
+gg_tukey1 <- tibble(resid = residuals(fit_anova_raw, type = "pearson"), fitted = fit_anova_raw$fitted.values) %>%
+  ggplot(aes(x = fitted, y = resid)) +
+  geom_point(alpha = 0.5, position = position_jitter(width = 5, height = 0)) +
+  # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+  geom_abline(slope = 0, intercept = 0, col = swatch()[3])
+
+gg_tukey2 <- 
+  tibble(resid = residuals(fit_anova, type = "pearson"), fitted = fit_anova$fitted.values) %>%
+    ggplot(aes(x = fitted, y = resid)) +
+    geom_point(alpha = 0.5, position = position_jitter(width = 0.01, height = 0)) +
+    # geom_smooth(method = "loess", col = swatch()[4]) + # We need to add some jitter, because the same concentrations are repeated a larger number of time: https://stackoverflow.com/questions/38864458/loess-warnings-errors-related-to-span-in-r but it does not really help too much, i will use the base plot for now.
+    geom_abline(slope = 0, intercept = 0, col = swatch()[3])
+
+ggarrange(gg_tukey1, gg_tukey2)  %>% 
+  annotate_figure(top = "Tukey Anscombe - Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
+
+```
+
+
+- are the errors independent?
+
+If the data has some serial structure (i.e., if observations were recorded in a certain time order), we typically
+want to check whether residuals close in time are more similar than residuals far apart, as this would be a
+violation of the independence assumption. We can do so by using a so-called index plot where we plot the
+residuals against time. For positively dependent residuals we would see time periods where most residuals
+have the same sign, while for negatively dependent residuals, the residuals would “jump” too often from
+positive to negative compared to independent residuals.
+
+```{r}
+
+resid <- residuals(fit_anova_raw, type = "pearson")
+resid_df <- tibble(resid = resid, id = as.numeric(names(resid)))
+
+gg_timeline1 <- tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
+  left_join(resid_df, by = "id") %>% 
+  ggplot(aes(x = time, y = resid)) +
+  geom_point() +
+  geom_line(alpha = 0.3)
+
+resid <- residuals(fit_anova, type = "pearson")
+resid_df <- tibble(resid = resid, id = as.numeric(names(resid)))
+
+gg_timeline2 <- tibble(id = 1:nrow(data_anova), time = data_anova$timestamp) %>%
+  left_join(resid_df, by = "id") %>% 
+  ggplot(aes(x = time, y = resid)) +
+  geom_point() +
+  geom_line(alpha = 0.3)
+
+ggarrange(gg_timeline1, gg_timeline2, nrow = 2) %>% 
+  annotate_figure(top = "Index-Plot for the ANOVA Residuals With (left) and Without Logarithmizing")
+
+```
+
+### Contrasts / Tukey HSD
+
+The F-test is rather unspecific. It basically gives us a “Yes/No” answer for the question “is there any
+treatment effect at all?”. It doesn’t tell us what specific treatment (or treatment combination) is significant.
+Quite often we have a more specific question than the aforementioned global null hypothesis. E.g., we might
+want to compare a set of new treatments vs. a control treatment or we want to do pairwise comparisons
+between many (or all) treatments.
+Multiple Testing: The problem with all statistical tests is the fact that the (overall) error rate increases with increasing number
+of tests.
+
+Tukey's test compares the means of every treatment to the means of every other treatment; that is, it applies simultaneously to the set of all pairwise comparisons and identifies any difference between two means that is greater than the expected standard error. In other words, the Tukey method is conservative when there are unequal sample sizes. 
+Assumptions:
+- The observations being tested are independent within and among the groups.
+- The groups associated with each mean in the test are normally distributed.
+- There is equal within-group variance across the groups associated with each mean in the test (homogeneity of variance).
+
+https://en.Wikipedia.org/wiki/Tukey%27s_range_test
+
+```{r}
+hsd <- TukeyHSD(fit_anova)
+plot(hsd)
+```
+
+### Random Effects Model
+
+So far we have been looking at three traps in isolation. But they are part of a larger "population" of Hirst traps being used at MCH or worldwide. Hence we also should look at ANOVA with trap as a random effect. This needs a bit more data per trap, otherwise the model fitting does not reach convergence and produce a so-called singular fit. Parameter estimation for the variance components is typically being done with a technique called restricted maximum likelihood (REML). We could also use “classical” maximum-likelihood estimators here, but REML estimates are less biased. The parameter is estimated with maximum-likelihood assuming that the variances are known.
+We want to compare the random effect variance for trap with the Residual variance here.
+
+```{r}
+fit_lmer <- lmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
+# isSingular(fit_lmer) # This has to be checked
+summary(fit_lmer)
+confint(fit_lmer, oldNames = FALSE)
+# ranef(fit_lmer)
+# confint(fit_anova) # For comparison
+```
+
+So we can compare the estimated "explained variance" by trap of the total variance for both anova and lmer.
+
+```{r}
+summary_anova <- summary(fit_anova)
+summary_lmer <- summary(fit_lmer)
+
+explained_anova <- summary_anova[[1]][1, 2] / summary_anova[[1]][2, 2]
+p_anova <- summary_anova[[1]][1, 5]
+
+explained_lmer <- summary_lmer$varcor$trap[1, 1] / summary_lmer$sigma^2
+
+tibble("ANOVA" = explained_anova,
+       "LMER" = explained_lmer) %>% 
+  kable() %>%
+  kable_styling(full_width = FALSE)
+
+```
+
+
+
+Checking the residuals again here:
+
+```{r}
+par(mfrow = c(1, 2))
+qqnorm(ranef(fit_lmer)$trap[, "(Intercept)"], main = "Random effects")
+qqnorm(resid(fit_lmer), main = "Residuals")
+plot(fit_lmer)
+```
+
+## Non-Parametric / Rank-Based Symmetrical
+
+### Kruskal-Wallis Test / Omnibus Test
+
+Kruskal-Wallis test by rank is a non-parametric alternative to one-way ANOVA test, which extends the two-samples Wilcoxon test in the situation where there are more than two groups. It’s recommended when the assumptions of one-way ANOVA test are not met. This tutorial describes how to compute Kruskal-Wallis test in R software. (http://www.sthda.com/english/wiki/kruskal-wallis-test-in-r)
+
+In this case the assumptions are sometimes not met for specific species specially when looking at shorter time windows.
+
+Assumptions
+
+The assumptions of the Kruskal-Wallis test are similar to those for the Wilcoxon-Mann-Whitney test.
+
+- Samples are random samples, or allocation to treatment group is random. 
+- The two samples are mutually independent. 
+- The measurement scale is at least ordinal, and the variable is continuous. 
+- If the test is used as a test of dominance, it has no distributional assumptions. If it used to compare medians, the distributions must be similar apart from their locations. 
+
+The test is generally considered to be robust to ties. However, if ties are present they should not be concentrated together in one part of the distribution (they should have either a normal or uniform distribution)
+https://influentialpoints.com/Training/kruskal-wallis_anova-principles-properties-assumptions.htm
+
+The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median. In other words, there should be roughly the same number of values above and below the median. This can be checked by visual inspection using histogram or density estimators
+
+```{r}
+data_transformed %>% 
+  ggplot(aes(x = !!sym(species))) +
+  geom_histogram(alpha = 0.7, bins = 50) +
+  # geom_freqpoly(col = swatch()[3], bins = 30) +
+  # geom_density(col = swatch()[5]) +
+  geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = swatch()[4]) +
+  ggtitle("Histogram of the Transformed Data With the Median (Red Line)")
+
+```
+
+
+```{r}
+kruskal.test(as.formula(paste(species, "~ trap")), data = data_transformed)
+```
+
+### Dunn's test and the Conover-Iman test
+
+The Dunn and Conover Test are typically used as a follow up to the Omnibus test above. It is appropriate to use those test and not the pairwise Wilcoxon Tests for the following two reason: 
+
+- The rank sum test uses different ranks than those employed in the Kruskal-Wallis test (i.e. in both tests you mush the observations together, then rank them, then separate the ranks by group—the rank sum ignores the ranks you got with the omnibus test).
+- The rank sum test does not use the pooled variance implied by the null hypothesis in the Kruskal-Wallis test (e.g., just as in one-way ANOVA where the post hoc t tests use an estimate of the pooled variance).
+
+(https://stats.stackexchange.com/questions/71996/differences-between-dwass-steel-critchlow-fligner-and-mann-whitney-u-test-for-a)
+
+The output following the Kruskal-Wallis test provides all possible pairwise comparisons (six in the case of four groups). So the one on the first row compares group B with group A, the first on the second row compares group C with group A, etc.).
+
+The upper number for each comparison is Dunn's pairwise z test statistic. The lower number is in this example the raw p-value associated with the test.
+, although this p-value changes depending on the family-wise error rate or false discovery rate multiple comparisons adjustment option. For step wise multiple comparison adjustments (e.g. Holm, Benjamini-Hochberg, etc.), the adjusted p-values will have an asterisk next to them if your would reject the null hypotheses at the specified significance level (which is not necessarily directly indicated by the adjusted p-values since rejection depends on ordering... see the documentation and citations therein for more details.).
+https://stats.stackexchange.com/questions/126686/how-to-read-the-results-of-dunns-test
+
+The null hypothesis for each pairwise comparison is that the probability of observing a randomly selected value from the first group that is larger than a randomly selected value from the second group equals one half; this null hypothesis corresponds
+to that of the Wilcoxon-Mann-Whitney rank-sum test. Like the ranksum test, if the data can be assumed to be continuous, and the distributions are assumed identical except for a difference in location, Dunn's test may be understood as a test for median difference. 'dunn.test' accounts for tied ranks.
+
+```{r}
+
+dunn.test::dunn.test(data_transformed %>% pull(!!sym(species)),
+                     data_transformed$trap,
+                     method = "holm") # Try different FEWR /FDR adjustments here
+
+conover.test::conover.test(data_transformed %>% pull(!!sym(species)),
+                     data_transformed$trap,
+                     method = "holm")
+
+```
+
+For Donover the ECDF curves are not allow to cross each other. This is actually not given for quite a few species and averaging windows. Maybe it's safer to use Dunn's test (they were usually comparable in terms of the return P-value statistics).
+
+```{r}
+data_transformed %>% 
+  select(!!sym(species), trap) %>% 
+  ggplot(aes(x = !!sym(species), col = trap)) +
+  stat_ecdf(geom = "line", pad = FALSE) +
+  ggtitle("Empirical Cumulative Distribution Function for All Traps")
+
+```
+
+
+```{r}
+# # This is incorrect, see: https://stats.stackexchange.com/questions/71996/differences-between-dwass-steel-critchlow-fligner-and-mann-whitney-u-test-for-a
+# 
+# pairwise.wilcox.test(data_anova %>% pull(!!sym(species)), 
+#                      data_anova$trap,
+#                      paired = FALSE,
+#                      p.adjust.method = "fdr",
+#                      conf.int = TRUE)
+```
+
+### Random Effects Model
+
+When using classic estimation methods, even one such outlier might inflate the between-group variability estimate and distort the results (see example discussed in Section 4). In such a case it would be natural to assume that the group’s random effect (or mean) is an outlier rather than all observations are outliers in the same direction. This concept of allowing potential contamination on different sources of variability leads to the “random effects contamination model”. With this model, we make the assumption of long-tailed or “gross error” distributions for the random effects as well and not just for the random errors. The effect of the contamination is then propagated via the design matrices to the actual observations. Levels of random variability can be hierarchical or crossed, or both, depending on the grouping structure in the data. This implies that the effect of a single outlier on the random effects level is not always as straight forward as in the above mentioned one-way anova example. The effect may be different for each observation as the result of an outlier for a single observation is combined with all the other random effects that affect this observation. This complex relationship between the source of contamination and what is effectively realized in the data can make it very hard or even impossible to spot contamination. This is where robust methods step in and help clear the picture. Basing the robust estimator on the “random effects contamination model” allows not only multiple sources of contamination, it also avoids unnecessary assumptions about the data’s grouping structure. The only assumption on the grouping structure, that is also required for classic estimation, is that the model parameters are estimable. Other contamination models usually assume that contamination is introduced and dealt with at the lowest level only – the level of the observations. In mixed-effects models, observations generally correlate with one another, and robust methods must respect these correlations. These dependencies between observations require other contamination models to make strict assumptions about the grouping structure. The random effects contamination model assumes that contamination occurs directly at the source of random variability, before the grouping structure is introduced, thus circumventing the complexity introduced by the data structure and avoids unnecessary assumptions.
+
+Currently, there are two different methods available for fitting models. They only differ in how the consistency factors for the Design Adaptive Scale estimates are computed. Available fitting methods for theta and sigma. DAStau (default): For this method, the consistency factors are computed using numerical quadrature. This is slower but yields more accurate results. This is the direct analogue to the DAS-estimate in robust linear regression.
+
+```{r}
+fit_rlmer <- rlmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
+summary(fit_rlmer)
+
+# # The parameters can be tuned for a more efficient fit, I leave this to the interested reader: 
+# fit_rlmer2 <- update(fit_rlmer, rho.sigma.e = psi2propII(smoothPsi, k = 1.5), rho.sigma.b = psi2propII(smoothPsi, k = 1.5))
+# compare(fit_lmer, fit_rlmer, fit_rlmer2, show.rho.functions = FALSE)
+# gg <- map(1:3, ~plot(fit_rlmer, which = .x))
+
+```
+
+# Measurement Spread and Error Distribution
+
+A second chapter of the paper should further elaborate on the relative errors between the traps.
+We are mostly interested to observe the difference of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
+
+In this first section we compare relative and absolute differences from the mean. Fitting parameters of a T-Distribution (distribution family visually chosen) using MLE (fitdistr / fit.st). The analysis is based on the transformed values, but the findings are usually independent of the log-transformation.
+
+```{r warning=FALSE}
+
+errors <- data_corr %>% 
+  mutate(exclude = rowSums(is.na(data_corr)) < 3, # At least one trap should have measured something otherise we are not calculating the means
+    mean = if_else(exclude,
+                   rowSums(.[2:ncol(traps_pairs)], na.rm = TRUE) / ncol(traps_pairs), 
+                   NA_real_)) %>% 
+  na.omit() %>% 
+  mutate_at(vars(all_of(traps)), ~(. - mean)) %>% 
+  pivot_longer(cols = 2:(1 + ncol(traps_pairs)), values_to = "error", names_to = "trap") %>% 
+  mutate(error_rel = error / mean) %>% 
+  select(-mean, -exclude)
+
+sd(errors$error, na.rm = TRUE)
+sd(errors$erro_rel[!is.na(errors$error_rel) & errors$error_rel < Inf]) # Those were introduced above by dividing by zero
+
+x <- seq(-2.5, 2.5, length.out = 10000)
+t_shape <- fitdistr(errors$error[!is.na(errors$error)], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
+
+m <- t_shape$estimate[1]
+s <- t_shape$estimate[2]
+df <- t_shape$estimate[3]
+t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
+
+t_shape_rel <- fitdistr(errors$error_rel[!is.na(errors$error_rel) & errors$error_rel < Inf], "t") # QRM::fit.st(!is.na(errors$error)) #leads to same result without warning
+m_rel <- t_shape_rel$estimate[1]
+s_rel <- t_shape_rel$estimate[2]
+df_rel <- t_shape_rel$estimate[3]
+t_errors_rel <- tibble(x = x, y = dt((x - m_rel) / s_rel, df = df_rel) / s_rel)
+
+gg_t_abs <- errors %>%
+  ggplot(aes(x=error, y = ..density..)) +
+  geom_histogram(bins= 100) +
+  geom_density(col = swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
+  geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
+  coord_cartesian(xlim = c(-5, 5))
+
+gg_t_rel <- errors %>%
+  ggplot(aes(x=error_rel, y = ..density..)) +
+  geom_histogram(bins= 100) +
+  geom_density(col = swatch()[4]) +
+  geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
+  geom_line(data = t_errors_rel, aes(x = x, y = y), col = swatch()[6]) +
+  coord_cartesian(xlim = c(-2, 2))
+
+ggarrange(gg_t_abs, gg_t_rel, nrow = 2) %>% 
+  annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
+                  bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n At the bottom the relative differences from the mean.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+```{r}
+
+sample <- tibble(x = (x-m)/s, y = pt((x-m)/s, df = df))
+sample_rel <- tibble(x = (x-m_rel)/s_rel, y = pt((x-m_rel)/s_rel, df = df))
+
+gg_cdf1 <- errors %>% 
+  ggplot(aes(x = error)) +
+  stat_ecdf(geom = "step", pad = FALSE) +
+  coord_cartesian(xlim = c(-2.5, 2.5)) +
+  geom_line(data = sample, aes(x = x, y = y))
+
+gg_cdf2 <- errors %>% 
+  ggplot(aes(x = error_rel)) +
+  stat_ecdf(geom = "step", pad = FALSE) +
+  coord_cartesian(xlim = c(-0.5, 0.5)) +
+  geom_line(data = sample_rel, aes(x = x, y = y))
+
+ggarrange(gg_cdf1, gg_cdf2, nrow = 1) %>%
+  annotate_figure(top = "Comparison of Empirical and Fitted CDF for Absolute (Left) and Relative Differences")
+```
+  
+Now we can investigate the goodness of the fit of the selected t-Distribution above.
+Graphically the QQ-Plot versus a t-distribution allows us to check whether the choice of distribution-family was sensible.
+
+```{r}
+errors %>% 
+  mutate(error_scaled = (error)) %>%
+  ggplot(aes(sample = error_scaled)) +
+  stat_qq(distribution = qt, dparams = as.list(df)) +
+  stat_qq_line(distribution = qt, dparams = as.list(df)) +
+  ggtitle("QQ-Plot to Compare Empirical Quantiles with Theoretical Ones from a t-Distribution")
+```
+
+Then we can carry out two statistical tests that measure the goodness-of-fit.
+Parameters have been estimated from data, so the tests in the following need to account for that (e.g. no KS-tests).
+
+The Anderson–Darling and Cramér–von Mises statistics belong to the class of quadratic EDF statistics (tests based on the empirical distribution function. The Anderson–Darling test assesses whether a sample comes from a specified distribution. It makes use of the fact that, when given a hypothesized underlying distribution and assuming the data does arise from this distribution, the cumulative distribution function (CDF) of the data can be assumed to follow a uniform distribution. The data can be then tested for uniformity with a distance test (Shapiro 1980). [Wikipedia]
+
+```{r}
+cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+cvm.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
+
+ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
 
 ```
 
