@@ -17,8 +17,9 @@ output:
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLUTION HERE #####
 
 species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
-traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst")
+resolution <- "3hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst") 
+if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
 
 ```
 
@@ -111,15 +112,25 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
 # We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
 # We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
 
-files_hirst <- list.files(path_data, pattern = "dwh.csv")
+file_hirst <- list.files(path_data, pattern = "dwh.csv")
 
-data_hirst_raw <- data.table::fread(paste0(path_data, files_hirst)) %>% 
+data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>% 
   as_tibble() %>% 
   select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
   mutate(timestamp = dmy_hm(timestamp)) %>% 
   filter(timestamp > ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
          timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
+
+# file_hirst_3h <- list.files(path_data, pattern = "dwh_3h.csv")
+# 
+# data_hirst_3h_raw <- data.table::fread(paste0(path_data, file_hirst_3h)) %>% 
+#   as_tibble() %>% 
+#   select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
+#   mutate(timestamp = dmy_hm(timestamp)) %>% 
+#   filter(timestamp > ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
+#          timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
+#   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
 
 ```
 
@@ -171,6 +182,8 @@ missing_hirst <- data_hirst %>% filter(is.na(total)) %>% pull(timestamp) # The N
 
 ```
 
+For the hourly values we rescale the measurements to a range from 0 to 100 fir hirst and poleno. The daily values and then based on those hourly averages. For the 3, 6 and 12 hour averages we will scale the resulting pollen counts for the poleno device to a scale from 0 to 100 as well.
+
 ```{r }
 
 data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
@@ -189,6 +202,8 @@ data_hourly_comb_raw <- data_poleno_hourly %>%
 # Those times have to be filtered for at least that specific trap. But, as we will compare traps with each other, it's safest to remove those times from all traps. As we are comparing with hourl averages from Hirst we should probably remove the full hours during which calibration was carried out. Our time series expands from the 15.2.2020 until the 3.5.2020
 
 # Für die Kalibration wird ein «Atomizer» (https://swisens.ch/products/atomizer/) auf den Einlass gesteckt welcher nur die zu kalibrierenden Pollen ins Gerät befördert. Also eine Art Laborbedingung im Feld. Das Gerät misst während der Kalibration nichts was in der realen Welt (und bei den anderen zwei Geräten) rumfliegt.
+
+# Here we exclude missing measurements from all traps to make the hourly and daily averages comparable.
 
 data_hourly_comb <- data_hourly_comb_raw %>% 
   mutate(total = if_else(between(timestamp, ymd_h("2020-02-18 08"), ymd_h("2020-02-18 16")) |
@@ -226,19 +241,6 @@ data_hourly_comb <- data_hourly_comb_raw %>%
 
 ```
 
-## Aggregation
-
-```{r}
-
-data_daily_comb <- data_hourly_comb %>% 
-                    group_by(date, trap) %>% 
-                    summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
-                    mutate(hour = "12:00",
-                           timestamp = date) %>% 
-                    ungroup()
-
-
-```
 
 ```{r fig.height=10}
 data_hourly_comb %>% 
@@ -249,6 +251,151 @@ data_hourly_comb %>%
   
 
 ```
+
+## Aggregation
+
+For the daily and hourly values we combine the hirst and poleno measurements. For the 3, 6 and 12hour averages we limit ourselves to the poleno measurements (not available in DWH). To create those 3, 6 and 12hour averages for poleno we will exclude the whole day where calibration was carried out (to be on the safe side). For the hourly averages we exclude the full hour during which calibration was carried out. For the daily averages we assume that enough measurements are available on each day and therefore don't exclude the full day, to have enough datapoints.
+
+```{r}
+
+data_daily_comb <- data_hourly_comb %>% 
+                    group_by(date, trap) %>% 
+                    summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+                    mutate(hour = "23:59",
+                           timestamp = date) %>% 
+                    ungroup()
+
+
+```
+
+```{r}
+calib_events <- c(
+  "2020-02-18",
+  "2020-02-20",
+  "2020-02-21",
+  "2020-02-25",
+  "2020-03-04",
+  "2020-03-11",
+  "2020-03-17",
+  "2020-03-18",
+  "2020-03-19",
+  "2020-03-20",
+  "2020-03-27",
+  "2020-03-30",
+  "2020-04-02",
+  "2020-04-06",
+  "2020-04-07",
+  "2020-04-13",
+  "2020-04-17",
+  "2020-04-21",
+  "2020-04-21",
+  "2020-04-23",
+  "2020-03-16"
+) %>% 
+  ymd()
+
+data_poleno_red <- map(data_poleno, ~.x %>% 
+  filter(!(date %in% calib_events)))
+
+data_hours3_pol <- map(data_poleno_red, ~.x %>% 
+  mutate(hms = format(timestamp, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "03:00:00" ~ 3,
+      hms > "03:00:00" & hms <= "06:00:00" ~ 6,
+      hms > "06:00:00" & hms <= "09:00:00" ~ 9,
+      hms > "09:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" & hms <= "15:00:00" ~ 15,
+      hms > "15:00:00" & hms <= "18:00:00" ~ 18,
+      hms > "18:00:00" & hms <= "21:00:00" ~ 21,
+      hms > "21:00:00" | hms == "00:00:00" ~ 0 # For the next day already
+      ),
+    date = if_else(hour == 0, date + days(1), date) # This way they will be allocated to the next day
+  ) %>% 
+  group_by(date, hour, trap) %>% 
+  summarise(total = as.integer(n())) %>% 
+  ungroup() %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), # Here we convert the 24th hour into hour zero of the next day
+         hour = hour(timestamp)))
+
+
+data_hours6_pol <- map(data_poleno_red, ~.x %>% 
+  mutate(hms = format(timestamp, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "06:00:00" ~ 6,
+      hms > "06:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" & hms <= "18:00:00" ~ 18,
+      hms > "18:00:00" | hms == "00:00:00" ~ 0
+    ),
+    date = if_else(hour == 0, date + days(1), date)
+  ) %>% 
+  group_by(date, hour, trap) %>% 
+  summarise(total = as.integer(n())) %>% 
+  ungroup() %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), # Here we convert the 24th hour into hour zero of the next day
+         hour = hour(timestamp)))
+
+data_hours12_pol <- map(data_poleno_red, ~.x %>% 
+  mutate(hms = format(timestamp, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" | hms == "00:00:00" ~ 0
+    ),
+    date = if_else(hour == 0, date + days(1), date)
+  )  %>% 
+  group_by(date, hour, trap) %>% 
+  summarise(total = as.integer(n())) %>% 
+  ungroup()  %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00")), # Here we convert the 24th hour into hour zero of the next day
+         hour = hour(timestamp)))
+
+```
+
+
+Let's see whether padding is necessary or whether we have values for all timestamps.
+We would expect to have a total of `r data_poleno_red %>% bind_rows %>% pull(date) %>% unique %>% length` 56 days with Poleno measurements that are not affected by calibration.
+Hence we want to see the respective number of measurements for the various averages.
+
+```{r}
+# measurement_counts <- (data_poleno_red %>% bind_rows %>% pull(date) %>% unique %>% length) * c(2, 4, 8)
+# 
+# data_hours3_pol %>% group_by(trap) %>% summarise(n = n())
+# data_hours6_pol %>% group_by(trap) %>% summarise(n = n())
+# data_hours12_pol %>% group_by(trap) %>% summarise(n = n())
+
+# We are lucky here and poleno2 has a measurement for each timestamp, hence we can add those timestamps with missing measurements to the other traps as well
+# Otherwise we could reate the timestamp manually as the always follow the same logic.
+
+fill_timeseries <- function(x){
+  list_timeseries <- x
+  for (j in 2:3){
+    list_timeseries[[j]] <- x[[1]] %>% 
+      select(timestamp) %>% 
+      left_join(x[[j]]) %>% 
+      mutate(date = date(timestamp),
+             hour = hour(timestamp),
+             trap = paste0("poleno", 2 + j),
+             total = if_else(is.na(total), 0L, total))
+  }
+  list_timeseries
+}
+  
+data_hours3_pol <- data_hours3_pol %>% fill_timeseries()
+data_hours6_pol <- data_hours6_pol %>% fill_timeseries()
+data_hours12_pol <- data_hours12_pol %>% fill_timeseries()
+
+data_hours3_comb <- data_hours3_pol %>% 
+  bind_rows() %>% 
+  mutate(total = scales::rescale(.$total, c(0, 100)))
+data_hours6_comb <- data_hours6_pol %>% 
+  bind_rows() %>% 
+  mutate(total = scales::rescale(.$total, c(0, 100)))
+data_hours12_comb <- data_hours12_pol %>% 
+  bind_rows() %>% 
+  mutate(total = scales::rescale(.$total, c(0, 100)))
+
+
+```
+
 
 ## Robustness of Traps / Simultaneous Measurements
 
@@ -303,10 +450,62 @@ number_traps_comb %>%
 
 ```
 
+The Poleno-traps allow to investigate different time-averages very easily. For the Hirst traps we only get 1hour, 3hour and daily averages from the DWH. The 3hour avg were excluded from this analysis because the observations don't appear to be iid (they are calcuated every hour) and the hirst traps were already compared ingreat detail in the hirstcomparison vignette. In the following we investigate the three poleno traps.
+
+```{r}
+data_hourly_comb <- data_hourly_comb_raw %>% 
+  mutate(total = if_else(between(timestamp, ymd_h("2020-02-18 08"), ymd_h("2020-02-18 16")) |
+                        between(timestamp, ymd_h("2020-02-20 14"), ymd_h("2020-02-20 19")) |
+                        between(timestamp, ymd_h("2020-02-21 08"), ymd_h("2020-02-21 16")) |
+                        between(timestamp, ymd_h("2020-02-25 10"), ymd_h("2020-02-25 16")) |
+                        between(timestamp, ymd_h("2020-03-04 13"), ymd_h("2020-03-04 16")) |
+                        between(timestamp, ymd_h("2020-03-11 13"), ymd_h("2020-03-11 16")) |
+                        between(timestamp, ymd_h("2020-03-17 09"), ymd_h("2020-03-17 12")) |
+                        between(timestamp, ymd_h("2020-03-18 13"), ymd_h("2020-03-18 17")) |
+                        between(timestamp, ymd_h("2020-03-19 13"), ymd_h("2020-03-19 17")) |
+                        between(timestamp, ymd_h("2020-03-20 13"), ymd_h("2020-03-20 16")) |
+                        between(timestamp, ymd_h("2020-03-27 10"), ymd_h("2020-03-27 12")) |
+                        between(timestamp, ymd_h("2020-03-30 07"), ymd_h("2020-03-30 10")) |
+                        between(timestamp, ymd_h("2020-04-02 14"), ymd_h("2020-04-02 16")) |
+                        between(timestamp, ymd_h("2020-04-06 11"), ymd_h("2020-04-06 17")) | # Extended by two hours until 17pm to cover the tube cleaning
+                        between(timestamp, ymd_h("2020-04-07 12"), ymd_h("2020-04-07 15")) |
+                        between(timestamp, ymd_h("2020-04-13 13"), ymd_h("2020-04-13 16")) |
+                        between(timestamp, ymd_h("2020-04-17 07"), ymd_h("2020-04-17 10")) |
+                        between(timestamp, ymd_h("2020-04-21 06"), ymd_h("2020-04-21 09")) |
+                        between(timestamp, ymd_h("2020-04-21 14"), ymd_h("2020-04-21 17")) |
+                        between(timestamp, ymd_h("2020-04-23 11"), ymd_h("2020-04-23 14")) | # Those were all calibration events
+                        between(timestamp, ymd_h("2020-03-16 08"), ymd_h("2020-03-16 10")) | # This is a Tube Cleaning Event outside calibration
+                        between(timestamp, ymd_h("2020-03-23 08"), ymd_h("2020-03-23 10")) | # During these time the Hirst trap had NAs, 
+                        timestamp %in% missing_hirst, # probably because the silicon band was being exchanged.
+                        0, total)) %>% 
+  group_by(timestamp) %>% 
+  mutate_at(vars(total), function(x){
+      if(all(x == 0))
+        return(NA) # This will set all measurements to NA if no trap measured any pollen. With Poleno there is always a measurement during the blooming season. That means that all NAs were introduced only because of the calibration events filtered out above.
+      else
+        return(x)
+  }) %>% 
+  ungroup()
+```
+
+
 # Visualization
 
 ```{r fig.height=10}
-data_hourly_comb %>%
+
+if (resolution == "daily"){
+  data_anova <- data_daily_comb
+} else if (resolution == "12hour"){
+  data_anova <- data_hours12_comb
+} else if (resolution == "6hour"){
+  data_anova <- data_hours6_comb
+} else if (resolution == "3hour"){
+  data_anova <- data_hours3_comb
+} else if (resolution == "hourly"){
+  data_anova <-data_hourly_comb
+}
+
+data_anova %>%
   ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
   geom_line() +
   ggtitle("Hourly Total Pollen Counts") +
@@ -335,17 +534,6 @@ There are two pathways to evaluate the similarity of the measurements between th
 
 ```{r}
 
-if (resolution == "daily"){
-  data_anova <- data_daily_comb
-} else if (resolution == "12hour"){
-  data_anova <- data_hours12_comb
-} else if (resolution == "6hour"){
-  data_anova <- data_hours6_comb
-} else if (resolution == "3hour"){
-  data_anova <- data_hours3_comb
-} else if (resolution == "hourly"){
-  data_anova <-data_hourly_comb
-}
 
 data_anova <- data_anova %>% 
   bind_rows() %>% 
@@ -855,7 +1043,6 @@ ggarrange(gg_t_abs) %>%
 ```{r}
 
 sample <- tibble(x = (x-m)/s, y = pt((x-m)/s, df = df))
-sample_rel <- tibble(x = (x-m_rel)/s_rel, y = pt((x-m_rel)/s_rel, df = df))
 
 gg_cdf1 <- errors %>% 
   ggplot(aes(x = error)) +
@@ -863,13 +1050,7 @@ gg_cdf1 <- errors %>%
   coord_cartesian(xlim = c(-2.5, 2.5)) +
   geom_line(data = sample, aes(x = x, y = y))
 
-gg_cdf2 <- errors %>% 
-  ggplot(aes(x = error_rel)) +
-  stat_ecdf(geom = "step", pad = FALSE) +
-  coord_cartesian(xlim = c(-0.5, 0.5)) +
-  geom_line(data = sample_rel, aes(x = x, y = y))
-
-ggarrange(gg_cdf1, gg_cdf2, nrow = 1) %>%
+ggarrange(gg_cdf1, nrow = 1) %>%
   annotate_figure(top = "Comparison of Empirical and Fitted CDF for Absolute (Left) and Relative Differences")
 ```
   
@@ -892,10 +1073,8 @@ The Anderson–Darling and Cramér–von Mises statistics belong to the class of
 
 ```{r}
 cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
-cvm.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
 
 ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
-ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = df_rel, estimated = TRUE)
 
 ```
 
