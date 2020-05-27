@@ -12,13 +12,15 @@ output:
 
 ---
 
+# Setup
+
 ```{r}
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLTION HERE #####
 
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -253,7 +255,9 @@ data <- measurements_after_exclusion %>%
 ```
 
 ```{r eval = FALSE}
-data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+gg_missmap <- data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+
+gg_missmap
 ```
 
 
@@ -330,6 +334,32 @@ data_hourly_raw <- map(data_raw, ~.x %>%
 
 data_hourly <- set_na(data_hourly_raw)
 
+
+data_hours2_raw <- map(data_raw, ~.x %>% 
+  mutate(hms = format(datetime, "%H:%M:%S"),
+    hour = case_when(
+      hms > "00:00:00" & hms <= "02:00:00" ~ 2,
+      hms > "02:00:00" & hms <= "04:00:00" ~ 4,
+      hms > "04:00:00" & hms <= "06:00:00" ~ 6,
+      hms > "06:00:00" & hms <= "08:00:00" ~ 8,
+      hms > "08:00:00" & hms <= "10:00:00" ~ 10,
+      hms > "10:00:00" & hms <= "12:00:00" ~ 12,
+      hms > "12:00:00" & hms <= "14:00:00" ~ 14,
+      hms > "14:00:00" & hms <= "16:00:00" ~ 16,
+      hms > "16:00:00" & hms <= "18:00:00" ~ 18,
+      hms > "18:00:00" & hms <= "20:00:00" ~ 20,
+      hms > "20:00:00" & hms <= "22:00:00" ~ 22,
+      hms > "22:00:00" | hms == "00:00:00" ~ 0 # For the next day already
+      ),
+    date = if_else(hour == 0, date + days(1), date) # This way they will be allocated to the next day
+  ) %>% 
+  group_by(date, hour, trap, line) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+  ungroup())
+
+data_hours2 <- set_na(data_hours2_raw)
+
+
 data_hours3_raw <- map(data_raw, ~.x %>% 
   mutate(hms = format(datetime, "%H:%M:%S"),
     hour = case_when(
@@ -405,7 +435,7 @@ Note: It does not matter whether we use the prepared or raw data for this, the o
 
 ```{r eval = FALSE}
 
-data_aggs <- list(data_hourly, data_hours3, data_hours6, data_hours12, data_daily)
+data_aggs <- list(data_hourly, data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
 number_of_measurements <- map(data_aggs, ~.x %>% 
   bind_rows %>%   
   group_by(trap, date, hour) %>% 
@@ -433,16 +463,19 @@ number_traps <- map2(number_of_measurements, timesteps, ~ bind_rows(.x %>%
   mutate_at(vars(all_of(species_selection), Total), ~ scales::percent(round(. / !!.y, 2))) %>% 
   select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
 
-number_traps %>% 
+kable_number_traps <- number_traps %>% 
   bind_rows() %>% 
   kable() %>% 
   kable_styling("striped") %>% 
   pack_rows("Hourly Averages", 1, 4) %>% 
-  pack_rows("3-Hour Averages", 5, 8) %>% 
-  pack_rows("6-Hour Averages", 9, 12) %>% 
-  pack_rows("12-Hour Averages", 13, 16) %>% 
-  pack_rows("Daily Averages", 17, 20) %>% 
+  pack_rows("2-Hour Averages", 5, 8) %>% 
+  pack_rows("3-Hour Averages", 9, 12) %>% 
+  pack_rows("6-Hour Averages", 13, 16) %>% 
+  pack_rows("12-Hour Averages", 17, 20) %>% 
+  pack_rows("Daily Averages", 21, 24) %>% 
   column_spec(c(1, 6), border_right = TRUE)
+
+kable_number_traps
 
 # For rendering docx documents
 # NOT ALLOWED AT MCH TO EXECUTE .exe file
@@ -1539,5 +1572,9 @@ Assumption of linearity is harder to achieve without adding much benefit (Wilcox
 Geometric mean regression, reduced major axis regression take into account that both y and x contain measurement errors. If measurements have been made on a continuous scale, the main choice is between the Altman–Bland method of differences and least products regression analysis. It is argued that although the former is relatively simple to execute, it does not distinguish adequately between fixed and proportional bias. Least products regression analysis, although more difficult to execute, does achieve this goal. There is almost universal agreement among bio-statisticians that the Pearson product–moment correlation coefficient (r) is valueless as a test for bias.
 http://www.jerrydallal.com/LHSP/compare.htm
 
+# Export Plots for Paper
 
+```{r}
+save_kable(kable_number_traps, "table_number_traps.png")
+```
 
