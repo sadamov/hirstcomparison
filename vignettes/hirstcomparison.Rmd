@@ -46,6 +46,7 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
+library(ggthemr)
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -56,7 +57,7 @@ devtools::load_all()
 
 # I like the look of these plots
 # devtools::install_github('cttobin/ggthemr')
-# library(ggthemr)
+
 ggthemr("fresh")
 
 # caTools and bitops are required to knit this vignette, those are not tracked by renv and must be installed by the user
