@@ -254,9 +254,8 @@ data <- measurements_after_exclusion %>%
 ```
 
 ```{r eval = FALSE}
-gg_missmap <- data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
 
-gg_missmap
 ```
 
 
@@ -419,8 +418,8 @@ data_daily_raw <- map(data_hourly_raw, ~.x %>%
 data_daily <- set_na(data_daily_raw)
 
 data_daily_raw <- map(data_daily_raw, ~.x %>% 
-  mutate(hour = paste0(sprintf("%02d", 23), ":59"),
-                       timestamp = ymd_hm(paste0(as.character(date), hour))))
+  mutate(hour = 23,
+         timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":59")))))
 
 ```
 
@@ -434,7 +433,7 @@ Note: It does not matter whether we use the prepared or raw data for this, the o
 
 ```{r eval = FALSE}
 
-data_aggs <- list(data_hourly, data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
+data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
 number_of_measurements <- map(data_aggs, ~.x %>% 
   bind_rows %>%   
   group_by(trap, date, hour) %>% 
@@ -462,19 +461,16 @@ number_traps <- map2(number_of_measurements, timesteps, ~ bind_rows(.x %>%
   mutate_at(vars(all_of(species_selection), Total), ~ scales::percent(round(. / !!.y, 2))) %>% 
   select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
 
-kable_number_traps <- number_traps %>% 
+number_traps %>% 
   bind_rows() %>% 
   kable() %>% 
   kable_styling("striped") %>% 
-  pack_rows("Hourly Averages", 1, 4) %>% 
-  pack_rows("2-Hour Averages", 5, 8) %>% 
-  pack_rows("3-Hour Averages", 9, 12) %>% 
-  pack_rows("6-Hour Averages", 13, 16) %>% 
-  pack_rows("12-Hour Averages", 17, 20) %>% 
-  pack_rows("Daily Averages", 21, 24) %>% 
+  pack_rows("2-Hour Averages", 1, 4) %>% 
+  pack_rows("3-Hour Averages", 5, 8) %>% 
+  pack_rows("6-Hour Averages", 9, 12) %>% 
+  pack_rows("12-Hour Averages", 13, 16) %>% 
+  pack_rows("Daily Averages", 17, 20) %>% 
   column_spec(c(1, 6), border_right = TRUE)
-
-kable_number_traps
 
 # For rendering docx documents
 # NOT ALLOWED AT MCH TO EXECUTE .exe file
@@ -582,15 +578,14 @@ Typically we see that trap 8 shows higher measurements for a variety of species.
 
 Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window.
 
-```{r }
+```{r fig.height=7}
 
-gg_list <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+gg_comparison <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE, combined = TRUE)
 
-ggarrange(ggarrange(gg_list[[1]], gg_list[[2]], nrow = 2), gg_list[[3]]) %>%
-    annotate_figure(top = title)
-# ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
+gg_timeseries <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE, combined = FALSE)[[1]] +
+  theme(legend.position = "right")
 
-gg_list[[1]]
+gg_comparison
 
 ```
 
@@ -620,6 +615,8 @@ if (resolution == "daily"){
   data_anova <- data_hours6
 } else if (resolution == "3hour"){
   data_anova <- data_hours3
+} else if (resolution == "2hour"){
+  data_anova <- data_hours2
 } else if (resolution == "hourly"){
   data_anova <-data_hourly
 }
@@ -725,8 +722,10 @@ gg3 <- data_corr %>%
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
 
-ggarrange(gg1, gg2, gg3, ncol = 3) %>%
+gg_corr <- ggarrange(gg1, gg2, gg3, ncol = 3) %>%
   annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+
+gg_corr
 ```
 
 
@@ -763,7 +762,7 @@ sd_diff <- data_altman %>%
 gg_ab1 <- data_altman %>% 
   ggplot(aes(x = mean24, y = diff24)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 8), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
+  coord_cartesian(xlim = c(min(data_altman$mean24), max(data_altman$mean24)), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -773,7 +772,7 @@ gg_ab1 <- data_altman %>%
 gg_ab2 <- data_altman %>% 
   ggplot(aes(x = mean28, y = diff28)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 8), ylim = c(-sd_diff[2] * 4, sd_diff[2] * 4)) +  
+  coord_cartesian(xlim = c(min(data_altman$mean28), max(data_altman$mean28)), ylim = c(-sd_diff[2] * 4, sd_diff[2] * 4)) +  
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -783,7 +782,7 @@ gg_ab2 <- data_altman %>%
 gg_ab3 <- data_altman %>% 
   ggplot(aes(x = mean48, y = diff48)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 8), ylim = c(-sd_diff[3] * 4, sd_diff[3] * 4)) +  
+  coord_cartesian(xlim = c(min(data_altman$mean48), max(data_altman$mean48)), ylim = c(-sd_diff[3] * 4, sd_diff[3] * 4)) +  
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -792,8 +791,10 @@ gg_ab3 <- data_altman %>%
 
 title <- "Altman-Bland Plots for all Traps"
 
-ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+gg_ab <- ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison of traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+
+gg_ab
   
 
 ```
@@ -1072,7 +1073,7 @@ The Wilcoxon signed-rank test assumes that the data are distributed symmetricall
 data_transformed %>% 
   ggplot(aes(x = !!sym(species))) +
   geom_histogram(alpha = 0.7, bins = 50) +
-  # geom_freqpoly(col = swatch()[3], bins = 30) +
+  # geom_freqpoly(col = swatch()[3], bins = 30) +/
   # geom_density(col = swatch()[5]) +
   geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = swatch()[4]) +
   ggtitle("Histogram of the Transformed Data With the Median (Red Line)")
@@ -1256,31 +1257,208 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ```
 
+
+## Relative Errors
+
+```{r}
+if (resolution == "daily"){
+  data_errors_raw <- data_daily_raw
+} else if (resolution == "12hour"){
+  data_errors_raw <- data_hours12_raw
+} else if (resolution == "6hour"){
+  data_errors_raw <- data_hours6_raw
+} else if (resolution == "3hour"){
+  data_errors_raw <- data_hours3_raw
+} else if (resolution == "2hour"){
+  data_errors_raw <- data_hours2_raw
+} else if (resolution == "hourly"){
+  data_errors_raw <- data_hourly_raw
+}
+
+data_errors_raw <- data_errors_raw %>% 
+  bind_rows() %>% 
+  mutate(trap = as.factor(trap),
+         hour = paste0(sprintf("%02d", hour), ":00"),
+         timestamp = ymd_hm(paste0(as.character(date), hour))) %>% 
+  group_by(trap, timestamp) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+  ungroup  %>% 
+  mutate(type = "dummy",
+         hour = hour(timestamp),
+         date = date(timestamp))
+
+# This is part of the code of the set_na() function in this package. slightly adjusted for this specific setup
+measurements_to_exclude <- data_errors_raw %>%
+    group_by(trap, timestamp) %>%
+    replace(is.na(.), 0) %>% # This should do nothing :-)
+    mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), .funs = list(exclude = ~mean(.))) %>%
+    ungroup() %>%
+    group_by(timestamp) %>%
+    mutate_at(vars(all_of(paste0(c(species_selection, "Total", "Group1", "Group2", "Group3", "Group4", "Group5"), "_exclude"))), function(x){
+      if(any(as.integer(x) == 0))
+        return(NA) # This will set all measurements to NA if no trap measured any pollen
+      else
+        return(0)
+    }) %>%
+    ungroup()
+
+measurements_after_exclusion <- map2_df(data_errors_raw %>% select(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), 
+                                        measurements_to_exclude %>% select(contains("exclude")), 
+                                        ~.x + as.integer(.y))
+
+data_errors <- measurements_after_exclusion %>%
+    bind_cols(measurements_to_exclude %>%
+                select(timestamp, date, hour, trap, type))
+
+```
+
+
+```{r fig.height=8}
+data_errors_conc_raw <- data_errors_raw %>% 
+  select(-type) %>%
+  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
+  select(trap, timestamp, type, value) %>% 
+  pivot_wider(names_from = trap) %>% 
+  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
+  mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+         mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8), # For the density plots we want to see all observations, even if the mean was calculated based on only one trap.
+                          rowSums(.[3:5], na.rm = TRUE) / measuring_traps, 
+                          NA_real_)) %>% 
+  pivot_longer(trap2:trap8, names_to = "trap") %>% 
+  mutate(conc = case_when(
+    mean >= 0 & mean < 10 ~ "Group00_10",
+    mean >= 10 & mean < 20 ~ "Group10_20",
+    mean >= 20 & mean < 50 ~ "Group20_50",
+    mean >= 50 & mean < 100 ~ "Group50_100",
+    mean >= 100 & mean < 500 ~ "Group100_500",
+    mean >= 500 ~ "Group500"
+  )) %>% 
+  select(timestamp, trap, value, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = value)
+
+data_errors_conc <- data_errors %>% 
+  select(-type) %>%
+  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
+  select(trap, timestamp, type, value) %>% 
+  pivot_wider(names_from = trap) %>% 
+  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
+  mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+         mean = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8), # For the error fitting exercise we only look at timestamps where all three traps measured. This is again defined in the respective functions in used further below in the sampling section.
+                          rowSums(.[3:5], na.rm = TRUE) / measuring_traps, 
+                          NA_real_)) %>% 
+  pivot_longer(trap2:trap8, names_to = "trap") %>% 
+  mutate(conc = case_when(
+    mean >= 0 & mean < 10 ~ "Group00_10",
+    mean >= 10 & mean < 20 ~ "Group10_20",
+    mean >= 20 & mean < 50 ~ "Group20_50",
+    mean >= 50 & mean < 100 ~ "Group50_100",
+    mean >= 100 & mean < 500 ~ "Group100_500",
+    mean >= 500 ~ "Group500"
+  )) %>% 
+  select(timestamp, trap, value, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = value) %>% 
+  select(-"NA")
+
+gg_conc_dens <- list()
+gg_conc_hist <- list()
+
+labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
+names(labels_y) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+names(labels_y_hist) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+  obs <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/3) %>% 
+    pull 
+  obs <- paste("# of Observations:", obs)
+  
+  gg_conc_dens[[j]] <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j)))  %>% 
+    ggplot() +
+    geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
+    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]]) +
+    coord_cartesian(xlim = c(0, NA))
+}
+
+gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Comparison of", tools::toTitleCase(resolution), "Measurements of the Three Traps for all Species and Different Concentration Groups."),
+                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
+
+# gg_dens_conc
+
+```
+
+
+```{r fig.height=8, eval = FALSE}
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+  obs <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/3) %>% 
+    pull 
+
+  obs <- paste("# of Observations:", obs)
+  
+  gg_conc_hist[[j]] <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j)))  %>% 
+    ggplot() +
+    geom_histogram(data = subset(data_errors_conc_raw, trap == "trap4"), aes(x = !!sym(j)), col = swatch()[3], fill = swatch()[3], alpha = 0.06, bins = 20) + 
+    geom_histogram(data = subset(data_errors_conc_raw, trap == "trap8"), aes(x = !!sym(j)), col = swatch()[4], fill = swatch()[4], alpha = 0.06, bins = 20) + 
+    geom_histogram(data = subset(data_errors_conc_raw, trap == "trap2"), aes(x = !!sym(j)), col = swatch()[2], fill = swatch()[2], alpha = 0.06, bins = 20)  + 
+    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y_hist[[j]])
+}
+
+ggarrange(plotlist = gg_conc_hist, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = "Comparison of Measurements of the Three Traps for all Pollen-Species and Different Concentration Groups.",
+                  bottom = text_grob("We are looking at Counts for all three traps to compare the measurements between them. Trap2 in blue, Trap4 in grey, Trap8 in red.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+```{r }
+
+# I manually removed the fitted t-distributions stuff from the plot_hist_dt function for this and then put it back in afterwards.
+
+gg_hist_species <- list()
+gg_hist_groups <- list()
+gg_hist_conc <- list()
+
+
+for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")){
+  gg_hist_species[[j]] <- plot_hist_dt(data_errors, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
+}
+gg_error_species <- ggarrange(plotlist = gg_hist_species, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Top-6 Species"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+
+for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
+  gg_hist_groups[[j]] <- plot_hist_dt(data_errors, species = j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
+}
+gg_error_size <- ggarrange(plotlist = gg_hist_groups, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Five Pollen Size Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+  gg_hist_conc[[j]] <- plot_hist_dt(data_errors_conc, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
+}
+
+gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+
+```
+
 # Sample Blooming Season Starts and SPI with Theoretical Error Distribution
 
 This is investigatoy work in progress. We will take the mean values from the three traps above and then create bootstrap samples for the divergence from the mean. Based on these samples we will investigate the spread of the SPI and the Start of the Blooming Season; two metrics highly relevant for Pollen prediction. This analysis will be carried out on the most robust (i.e. daily-averages) values.
+
+Some of the following metrics only make sense with daily averages. Hence the daily data is hardcoded in this chapter. The sampling will only be carried out with daily values (as discussed with Regula Gehrig).
 
 ## For Different Species
 
 ```{r fig.height=6, eval = FALSE}
 # set.seed(123)
+data_sampling <- data_errors
 
-data_sampling <- data_daily %>% 
-  bind_rows() %>% 
-  mutate_at(vars(-trap, -date, -hour, -timestamp), ~if_else(. == 0, NA_real_, .)) %>% 
-  mutate(trap = as.factor(trap)) %>% 
-  group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup %>% 
-  mutate(type = "dummy")
-
-data_sampling_raw <- data_daily_raw %>% 
-  bind_rows() %>% 
-  mutate(trap = as.factor(trap)) %>% 
-  group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup  %>% 
-  mutate(type = "dummy")
+data_sampling_raw <- data_errors_raw
 
 gg_hist_species <- list()
 samples_species <- list()
@@ -1330,15 +1508,16 @@ for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")){
         select(!!sym(j), trap, timestamp) %>%
         pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>%
         setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>%
-        mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                              rowSums(.[2:4], na.rm = TRUE) / 3,
+        mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+               mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
+                              rowSums(.[2:4], na.rm = TRUE) / measuring_traps,
                               NA_real_)) %>%
         pull(mean) %>%
         na.omit()
     
       sampled_days <- map(mean_traps, ~ .x * pmax(0, samples_species[[j]]))
       
-      for (i in 1:1000){
+      for (i in 1:100){
         
         sampled_days_random <- map(sampled_days, ~sample(.x, 1)) %>% unlist()
   
@@ -1413,101 +1592,6 @@ annotate_figure(top = "Boxplot of Sampled SPI for Pollen Size Groups",
 ## For Different Pollen-Concentrations
 
 
-```{r fig.height=8, eval = FALSE}
-
-data_sampling_conc_raw <- data_sampling_raw %>% 
-  select(-type) %>%
-  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
-  select(trap, timestamp, type, value) %>% 
-  pivot_wider(names_from = trap) %>% 
-  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
-  mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                          rowSums(.[3:5], na.rm = TRUE) / 3, 
-                          NA_real_)) %>% 
-  pivot_longer(trap2:trap8, names_to = "trap") %>% 
-  mutate(conc = case_when(
-    mean >= 10 & mean < 20 ~ "Group10_20",
-    mean >= 20 & mean < 50 ~ "Group20_50",
-    mean >= 50 & mean < 100 ~ "Group50_100",
-    mean >= 100 & mean < 500 ~ "Group100_500",
-    mean >= 500 ~ "Group500"
-  )) %>% 
-  select(timestamp, trap, value, conc, type) %>% 
-  pivot_wider(names_from = conc, values_from = value) %>% 
-  select(-"NA")
-
-data_sampling_conc <- data_sampling %>% 
-  select(-type) %>%
-  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
-  select(trap, timestamp, type, value) %>% 
-  pivot_wider(names_from = trap) %>% 
-  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
-  mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                          rowSums(.[3:5], na.rm = TRUE) / 3, 
-                          NA_real_)) %>% 
-  pivot_longer(trap2:trap8, names_to = "trap") %>% 
-  mutate(conc = case_when(
-    mean >= 10 & mean < 20 ~ "Group10_20",
-    mean >= 20 & mean < 50 ~ "Group20_50",
-    mean >= 50 & mean < 100 ~ "Group50_100",
-    mean >= 100 & mean < 500 ~ "Group100_500",
-    mean >= 500 ~ "Group500"
-  )) %>% 
-  select(timestamp, trap, value, conc, type) %>% 
-  pivot_wider(names_from = conc, values_from = value) %>% 
-  select(-"NA")
-
-gg_conc_dens <- list()
-gg_conc_hist <- list()
-
-labels_y <- list(0.065, 0.025, 0.015, 0.004, 0.0015)
-labels_y_hist <- list(13, 10, 10, 7.5, 3)
-names(labels_y) <- c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
-names(labels_y_hist) <- c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
-
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
-  obs <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j))) %>% 
-    summarise(n()/3) %>% 
-    pull 
-  obs <- paste("# of Observations:", obs)
-  
-  gg_conc_dens[[j]] <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j)))  %>% 
-    ggplot() +
-    geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
-    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]])
-}
-
-ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = "Comparison of Measurements of the Three Traps for all Species and Different Concentration Groups.",
-                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
-
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
-  obs <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j))) %>% 
-    summarise(n()/3) %>% 
-    pull 
-
-  obs <- paste("# of Observations:", obs)
-  
-  gg_conc_hist[[j]] <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j)))  %>% 
-    ggplot() +
-    geom_histogram(data = subset(data_sampling_conc_raw, trap == "trap4"), aes(x = !!sym(j)), col = swatch()[3], fill = swatch()[3], alpha = 0.06, bins = 20) + 
-    geom_histogram(data = subset(data_sampling_conc_raw, trap == "trap8"), aes(x = !!sym(j)), col = swatch()[4], fill = swatch()[4], alpha = 0.06, bins = 20) + 
-    geom_histogram(data = subset(data_sampling_conc_raw, trap == "trap2"), aes(x = !!sym(j)), col = swatch()[2], fill = swatch()[2], alpha = 0.06, bins = 20)  + 
-    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y_hist[[j]])
-}
-
-ggarrange(plotlist = gg_conc_hist, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = "Comparison of Measurements of the Three Traps for all Pollen-Species and Different Concentration Groups.",
-                  bottom = text_grob("We are looking at Counts for all three traps to compare the measurements between them. Trap2 in blue, Trap4 in grey, Trap8 in red.", color = swatch()[1], face = "italic", size = 10))
-
-
-```
-
-
 ```{r fig.height=6, eval = FALSE}
 # set.seed(123)
 
@@ -1516,7 +1600,7 @@ ggthemr("fresh")
 gg_hist_conc <- list()
 samples_conc <- list()
 
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
   samples_conc[[j]] <- plot_hist_dt(data_sampling_conc, j, n_test = 1, samples = 10)
   gg_hist_conc[[j]] <- plot_hist_dt(data_sampling_conc, j, n_test = 1, samples = 10, plots = TRUE)
 }
@@ -1534,7 +1618,7 @@ ggthemr("fresh")
 gg_spi_conc <- list()
 
 
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
  gg_spi_conc[[j]] <- plot_spi(data_sampling_conc_raw, j, samples = samples_conc, n = 10, xlim = c(0, 3.5e4))
 }
 
@@ -1571,9 +1655,23 @@ Assumption of linearity is harder to achieve without adding much benefit (Wilcox
 Geometric mean regression, reduced major axis regression take into account that both y and x contain measurement errors. If measurements have been made on a continuous scale, the main choice is between the Altman–Bland method of differences and least products regression analysis. It is argued that although the former is relatively simple to execute, it does not distinguish adequately between fixed and proportional bias. Least products regression analysis, although more difficult to execute, does achieve this goal. There is almost universal agreement among bio-statisticians that the Pearson product–moment correlation coefficient (r) is valueless as a test for bias.
 http://www.jerrydallal.com/LHSP/compare.htm
 
-# Export Plots for Paper
+# Plots for Paper
 
 ```{r}
-save_kable(kable_number_traps, "table_number_traps.png")
+# The Sysadmin does not allow to save kabel as png (need phantomjs), hence the tables were saved manually.
+# The GG-Plots are being saved right here:
+
+#### PER SPECIES AND TEMPORAL AVERAGE
+ggsave("figure1_timeseries_boxplot_hist.png", gg_comparison, width = 9, height = 6, dpi = 300)
+ggsave("figure2_timeseries.png", gg_timeseries, width = 9, height = 6, dpi = 300)
+ggsave("figure3_correlation.png", gg_corr, width = 12, height = 8, dpi = 300)
+ggsave("figure4_altman_bland.png", gg_ab, width = 12, height = 8, dpi = 300)
+
+#### PER TEMPORAL AVERAGE
+ggsave("figure5_error_hist_species.png", gg_error_species, width = 12, height = 8, dpi = 300)
+ggsave("figure6_error_hist_size.png", gg_error_size, width = 12, height = 8, dpi = 300)
+ggsave("figure7_error_hist_conc.png", gg_error_conc, width = 12, height = 8, dpi = 300)
+ggsave("figure8_measurement_differences_conc_groups.png", gg_dens_conc, width = 12, height = 8, dpi = 300)
 ```
+
 

@@ -49,14 +49,15 @@ set_na <- function(data) {
 #' @param group Either compare traps or lines within traps c("line", "trap")
 #' @param traps Which traps should be plotted c(2, 4, 6)
 #' @param rm_zeros Should zero pollen measurements be removed from the plot
+#' @param combined Should the function return the combined plots with title or seperate plots
 #'
 #' @return A data frame with assets allocated to 5 main categories
 
 
-plot_hirst <- function(species, resolution, group, traps, rm_zeros){
+plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
 
   # If needed one can add ifelse clauses here to make function more robust
-  title <- tools::toTitleCase(paste0(resolution, " average concentrations of ", species, " per ", group, " for trap(s) number ", paste(traps, collapse = ", ")))
+  title <- tools::toTitleCase(paste0(resolution, " average concentrations of ", species, " Pollen per ", group, " for trap(s) number ", paste(traps, collapse = ", ")))
   alpha <- 0.5
 
   # The first plot needs actual datetimes for the x-axis, hence we need some complicated if statements
@@ -68,6 +69,8 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros){
     data_plot <- data_hours6
   } else if (resolution == "3hour"){
     data_plot <- data_hours3
+  } else if (resolution == "2hour"){
+    data_plot <- data_hours2
   } else if (resolution == "hourly"){
     data_plot <-data_hourly
   }
@@ -93,7 +96,7 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros){
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    labs(y = "Mean Conc. [#Pollen/m³]", x = "")
+    labs(y = "Log Mean Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
     ggplot() +
@@ -101,10 +104,14 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros){
     facet_wrap(vars(!!sym(group)), ncol = 1) +
     theme(legend.position = "bottom") +
     coord_flip() +
-    labs(x = "Occurence of Pollen Concentrations", y = "Mean Conc. [#Pollen/m³]")
+    labs(x = "Occurence of Pollen Concentrations", y = "Log Mean Conc. [#Pollen/m³]")
 
-  list(gg1, gg2, gg3)
-
+  if (!combined) {
+    list(gg1 + ggtitle(title), gg2 + ggtitle(title), gg3 + ggtitle(title))
+  } else {
+    ggarrange(ggarrange(gg1, gg2, nrow = 2), gg3) %>%
+      annotate_figure(top = title)
+  }
 }
 
 #' Create a Comparison Plot of Pollen Concentrations for different traps and lines
@@ -193,8 +200,9 @@ plot_spi <- function(data, species, samples, n = 1000, xlim = c(0, 3.5e4)){
       select(!!sym(species), trap, timestamp, type) %>%
       pivot_wider(names_from = trap, values_from = !!sym(species)) %>%
       setNames(c("timestamp", "type", paste0("trap", c(2, 4, 8)))) %>%
-      mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                            rowSums(.[3:5], na.rm = TRUE) / 3,
+      mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+             mean = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
+                            rowSums(.[3:5], na.rm = TRUE) / measuring_traps, # This is only necessary if the condition one line above is less strict
                             NA_real_)) %>%
       pull(mean) %>%
       na.omit()
@@ -228,53 +236,56 @@ plot_spi <- function(data, species, samples, n = 1000, xlim = c(0, 3.5e4)){
 #' @param n_test Number of times the cvm and ad tests should be carried out
 #' @param samples Number of samples created for each day
 #' @param plots If plots is TRUE, histogram and density plots are returned, if FALSE the fct returns sampled daily values
+#' @param tdist Should a t distribution be fitted to the data?
 #'
 #' @return A list of ggplots
 
-plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FALSE){
+plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FALSE, tdist = TRUE){
 
   ggthemr("fresh")
 
   cvm <- numeric()
   ad <- numeric()
-
   errors <- data %>%
     select(!!sym(species), trap, timestamp, type) %>%
     pivot_wider(names_from = trap, values_from = !!sym(species)) %>%
     setNames(c("timestamp", "type", paste0("trap", c(2, 4, 8)))) %>%
-    mutate(mean = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
-                          rowSums(.[3:5], na.rm = TRUE) / 3,
+    mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+           mean = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
+                          rowSums(.[3:5], na.rm = TRUE) / measuring_traps, # This is only necessary if the condition one line above is less strict
                           NA_real_)) %>%
     mutate_at(vars(paste0("trap", c(2, 4, 8))), ~(. / mean)) %>%
     pivot_longer(cols = trap2:trap8, values_to = "error", names_to = "trap")
 
-  sd <- sd(errors$error, na.rm = TRUE)
-  e <- simpleError("test error")
-  t_shape <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
-  # t_shape <- QRM::fit.mst(errors$error, method = "Brent", upper = 2, lower = 1, nit = 2000, tol = 1e-10) # https://magesblog.com/post/2013-03-12-how-to-use-optim-in-r/ or here https://stat.ethz.ch/R-manual/R-devel/library/stats/html/optim.html
-  if (class(t_shape) != "try-error"){
-    m <- t_shape$par.ests[2]
-    s <- t_shape$par.ests[3]
-    df <- t_shape$par.ests[1]
-    t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s) # See here for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
+  if (tdist){
+    sd <- sd(errors$error, na.rm = TRUE)
+    e <- simpleError("test error")
+    t_shape <- try(QRM::fit.st(errors$error[!is.na(errors$error)])) # Actually lead to the same result as the bootstrapped version below
+    # t_shape <- QRM::fit.mst(errors$error, method = "Brent", upper = 2, lower = 1, nit = 2000, tol = 1e-10) # https://magesblog.com/post/2013-03-12-how-to-use-optim-in-r/ or here https://stat.ethz.ch/R-manual/R-devel/library/stats/html/optim.html
+    if (class(t_shape) != "try-error"){
+      m <- t_shape$par.ests[2]
+      s <- t_shape$par.ests[3]
+      df <- t_shape$par.ests[1]
+      t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s) # See here for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
 
-    # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
+      # If the parameteres are estimated from the data then this test applies the method from Braun and splits the data into two equally sized subsets. Therefore the test results are not stable, especially for smaller datasets (coarse temporal resolution). I will try to bootstrap the testing and the use the  mean (not 100% if this is valid, tbd).
 
-    for (i in 1:n_test) {
-      cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
-      ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+      for (i in 1:n_test) {
+        cvm_test <- cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
+        ad_test <- ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
 
-      cvm[i] <- cvm_test$p.value
-      ad[i] <- ad_test$p.value
+        cvm[i] <- cvm_test$p.value
+        ad[i] <- ad_test$p.value
+      }
+
+      cvm <- mean(cvm)
+      ad <- mean(ad)
+
+      samples <- rt(samples, df = df) * s + m # This gives us 10k random samples for the absolute log-differences from the mean. See here again for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
     }
-
-    cvm <- mean(cvm)
-    ad <- mean(ad)
-
-    samples <- rt(samples, df = df) * s + m # This gives us 10k random samples for the absolute log-differences from the mean. See here again for supplying location and scale parameteres to t-distribution in Base-R: https://en.wikipedia.org/wiki/Location%E2%80%93scale_family
-
-
   }
+
+
 
   gg <- errors %>%
     ggplot(aes(x=error, y = ..density..)) +
@@ -284,11 +295,13 @@ plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FAL
     coord_cartesian(xlim = c(0, 2)) +
     labs(x = paste("Error", species))
   if (plots){
-    if (class(t_shape) != "try-error"){
+    if (tdist){
+      if (class(t_shape) != "try-error"){
       gg +
         geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
         geom_label(label = paste("P-Values \n CVM Test:", round(cvm, 2), "\n AD-Test", round(ad, 2)), aes(x = 0.2, y = 1), size = 3) +
         geom_label(label = paste("SD:", round(sd, 3), "\n DF:", round(df, 2)), aes(x = 1.8, y = 1), size = 3)
+      }
     } else gg
   } else
     samples
