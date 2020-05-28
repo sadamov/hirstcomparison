@@ -48,7 +48,7 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
-library(ggthemr)
+# library(ggthemr)
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -579,7 +579,7 @@ Typically we see that trap 8 shows higher measurements for a variety of species.
 
 Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window.
 
-```{r fig.height=7}
+```{r fig.height=7, fig.width=15}
 
 gg_comparison <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE, combined = TRUE)
 
@@ -1659,6 +1659,7 @@ http://www.jerrydallal.com/LHSP/compare.htm
 # Plots for Paper
 
 ```{r}
+
 # The Sysadmin does not allow to save kabel as png (need phantomjs), hence the tables were saved manually.
 # The GG-Plots are being saved right here:
 

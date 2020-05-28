@@ -10,3 +10,5 @@ hirstcomparison_files
 hirstcomparison_cache
 polenocomparison_cache
 figures_tables
+data_aggregated.Rdata
+data_poleno.Rdata

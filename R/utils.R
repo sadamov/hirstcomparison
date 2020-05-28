@@ -84,6 +84,13 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
     mutate_at(vars("trap", "line"), ~ as.factor(.)) %>%
     {if(rm_zeros) filter(., !!(sym(species)) > 0) else .}
 
+  if (group == "trap"){
+    data_plot <- data_plot %>%
+      group_by(trap, timestamp) %>%
+      summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>%
+      ungroup
+  }
+
   gg1 <- data_plot %>%
     ggplot(aes(x = timestamp)) +
     geom_line(aes(y = !!sym(species), col = !!sym(group)), alpha = alpha) +
@@ -139,7 +146,7 @@ plot_comb <- function(resolution, traps, rm_zeros){
   } else if (resolution == "3hour"){
     data_plot <- data_hours3_comb
   } else if (resolution == "hourly"){
-    data_plot <-data_hourly_comb
+    data_plot <- data_hourly_comb
   }
 
   # data_plot <- map(data_plot, ~.x %>%
@@ -162,7 +169,7 @@ plot_comb <- function(resolution, traps, rm_zeros){
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    coord_cartesian(ylim = c(0, 50)) +
+    coord_cartesian(ylim = c(0, 60)) +
     labs(y = "Mean Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
