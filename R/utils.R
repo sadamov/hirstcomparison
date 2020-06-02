@@ -160,7 +160,7 @@ plot_comb <- function(resolution, traps, rm_zeros){
 
   gg1 <- data_plot %>%
     ggplot(aes(x = timestamp)) +
-    geom_line(aes(y = total, col = trap), alpha = alpha) +
+    geom_line(aes(y = exp(total), col = trap), alpha = alpha) +
     theme(legend.position = "none") +
     labs(y = "Mean Conc. [#Pollen/m³]", x = "")
 
@@ -171,7 +171,7 @@ plot_comb <- function(resolution, traps, rm_zeros){
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
     coord_cartesian(ylim = c(0, 10)) +
-    labs(y = "Mean Conc. [#Pollen/m³]", x = "")
+    labs(y = "Mean Log. Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
     ggplot() +
@@ -179,7 +179,7 @@ plot_comb <- function(resolution, traps, rm_zeros){
     facet_wrap(vars(trap), ncol = 1) +
     theme(legend.position = "bottom") +
     coord_flip(ylim = c(0, 10)) +
-    labs(x = "Occurence of Pollen Concentrations", y = "Mean Conc. [#Pollen/m³]")
+    labs(x = "Occurence of Pollen Concentrations", y = "Mean Log. Conc. [#Pollen/m³]")
 
   ggarrange(ggarrange(gg1, gg2, nrow = 2), gg3) %>%
     annotate_figure(top = title)

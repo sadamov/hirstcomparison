@@ -19,7 +19,7 @@ output:
 # rmarkdown::render("vignettes/polenocomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
-resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst") 
 if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
 
@@ -187,8 +187,7 @@ missing_hirst <- data_hirst_prep %>% filter(is.na(total)) %>% pull(timestamp) # 
 
 For the hourly values we rescale the measurements to a range from 0 to 100 for hirst and poleno. The daily values and then based on those hourly averages. For the 3, 6 and 12 hour averages we will scale the resulting pollen counts for the poleno device to a scale from 0 to 100 as well.
 
-Right now we don't have the official factor to convert the pollen counts into concentrations for Poleno. Probably by chance the counts are already very similar to the pollen per m^3 measured by hirst. I first did this exercise with scaling the time series from each trap and for each temporal aggregation to a scale of 0 to 100. After discussion with the MDS team I tried to apply a simple scaling factor to poleno, so that all time series have the same median. Depending on the research question it might be less impactful to scale the median or to the same min-max. To compare the timeseries with boxplots, it is probably more accurate to rescale each timeseries to a range from 0 to 100 (also because for 3, 6, and 12 hour avg. we don't have a scaling factor based on hirst available). The scaling factor based on the median would actually be quite low.
-
+Right now we don't have the official factor to convert the pollen counts into concentrations for Poleno. Probably by chance, the counts are already very similar to the pollen per m^3 measured by hirst. I first did this exercise with scaling the time series from each trap and for each temporal aggregation to a scale of 0 to 100. After discussion with the MDS team I tried to apply a simple scaling factor to poleno, so that all time series have the same median. Depending on the research question it might be less impactful to scale the median or to the same min-max. In any case, the concentrations are already very close to Hirst-concentrations. It makes therefore little sense to introduce additional uncertainty by applying some sort of scaling to the data. For now we work with unscaled data.
 ```{r eval = TRUE}
 
 # data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
@@ -250,11 +249,13 @@ data_hourly_comb <- data_hourly_comb_raw %>%
 
 ```
 
-I tried to be less strict with removing data for the hourly and daily averages, but the resulting time series show some really large differences between the traps. It is not fair to compare the traps during calibration events and as discussed with Benoit Crouzy, the calibration can sometimes affect the measurements that come directly after. Hence it was suggested to remove the full calibration days. This will be consistent with the preparation for 3 and 6 and 12 hour averages. 
+For any calibration event the full hour will be excluded from the measurement. I also did the whole analysis with excluding the full day, as apparently the calibration can distort the measurements for multiple hours. In the end I found that the distortion is not large and only the full hour has to be excluded. It makes sense to exclude the least amount of data, to be able to calculate meaningful statistics and create nice time-series plots. For the 3, 6 and 12 hour averages I will fall back to full-day exclusion, as it would be too cumbersome to define cases with (in-) sufficient measurements in any specific timestep.
+
+
 
 ```{r eval = TRUE}
 
-# # This excludes the full day where calibration events happened. The calib events can distort the measurements even hours after the actual calibration. If one does this a lot of data is excluded from the analysis, but it is the most robust procedure and the same approach was chosen for 3, 6, 12  hour averages (not to do the exclusion of calib events multiple times for different aggregations)
+
 calib_events <- c(
   "2020-02-18",
   "2020-02-20",
@@ -281,13 +282,13 @@ calib_events <- c(
   ymd()
 
 
-
-hourly_calib <- tibble(date = rep(calib_events, each = 24), hour = rep(seq(1, 24, 1), times = length(calib_events))) %>%
-  mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
-         total = NA_real_)
-
-data_hourly_comb <- data_hourly_comb %>%
-  mutate(total = if_else(timestamp %in% hourly_calib$timestamp, NA_real_, total))
+## This excludes the full day where calibration events happened. The calib events can distort the measurements even hours after the actual calibration. If one does this a lot of data is excluded from the analysis, but it is the most robust procedure and the same approach was chosen for 3, 6, 12  hour averages (not to do the exclusion of calib events multiple times for different aggregations)
+# hourly_calib <- tibble(date = rep(calib_events, each = 24), hour = rep(seq(1, 24, 1), times = length(calib_events))) %>%
+#   mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
+#          total = NA_real_)
+# 
+# data_hourly_comb <- data_hourly_comb %>%
+#   mutate(total = if_else(timestamp %in% hourly_calib$timestamp, NA_real_, total))
 ```
  
 
@@ -562,7 +563,7 @@ The Poleno-traps allow to investigate different time-averages very easily. For t
 
 # Visualization
 
-```{r fig.height=10}
+```{r fig.height=8}
 
 len_traps <- 4 - length(traps)
 if (len_traps != 0){
@@ -677,7 +678,7 @@ corr_matrix <- map(methods, ~corr.test(
 
 ```
 
-```{r fig.height=10, fig.width = 14}
+```{r fig.height=8}
 
 traps_pairs <- combn(traps, 2)
 gg_corr <- list()
@@ -697,15 +698,15 @@ for (i in 1:ncol(traps_pairs)){
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1, method = "loess") +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = max(data_corr[traps_pairs[1, i]], na.rm = TRUE) + 1, y = max(data_corr[traps_pairs[1, i]], na.rm = TRUE) + 1)) +
+  geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = max(data_corr[traps_pairs[1, i]], na.rm = TRUE), y = 1)) +
   coord_cartesian(ylim = c(0, max(data_corr[traps_pairs[1, i]], na.rm = TRUE) + 2), xlim = c(0, max(data_corr[traps_pairs[1, i]], na.rm = TRUE) + 3))
   
 }
 
-title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
+title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen as measured by the ", length(traps), " traps"))
 
 ggarrange(plotlist = gg_corr) %>%
-  annotate_figure(top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+  annotate_figure(top = title, bottom = text_grob("Pairwise correlation of traps; grey line shows the Loess smother; the red line shows a theoretical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the r-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 12))
 ```
 
 
@@ -714,7 +715,7 @@ ggarrange(plotlist = gg_corr) %>%
 
 The well established AB-method for clinical trials can be used here as well to compare the means and differences between traps. Again we see that trap 8 generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence the traps can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
 
-```{r fig.height=9}
+```{r fig.height=8}
 
 gg_ab <- list()
 
@@ -754,10 +755,10 @@ for (i in 1:ncol(traps_pairs)) {
     geom_smooth(formula = "y ~ x", alpha = 0.1, method = "loess") 
 }
   
-title <- "Altman-Bland Plots for all Traps"
+title <- tools::toTitleCase(paste0("Bland-Altman Plots for ", resolution, " average concentrations of ", species, " pollen as measured by the ", length(traps), " traps"))
 
 ggarrange(plotlist = gg_ab) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison of means and differences between traps; grey line shows the Loess smother; the red line shows a theoretical perfect agreement between two traps of zero. \n The dashed red line represents a band with width ±1.96 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
   
 
 ```
