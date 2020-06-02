@@ -154,7 +154,8 @@ plot_comb <- function(resolution, traps, rm_zeros){
 
   data_plot <- data_plot %>%
     filter(trap %in% traps) %>%
-    mutate(trap = as.factor(trap)) %>%
+    mutate(trap = as.factor(trap),
+           total = log(total + 1)) %>%
     {if(rm_zeros) filter(., total > 0) else .}
 
   gg1 <- data_plot %>%
@@ -169,15 +170,15 @@ plot_comb <- function(resolution, traps, rm_zeros){
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    coord_cartesian(ylim = c(0, 60)) +
+    coord_cartesian(ylim = c(0, 10)) +
     labs(y = "Mean Conc. [#Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
     ggplot() +
-    geom_histogram(aes(y = total, fill = trap), binwidth = 1, alpha = alpha) +
+    geom_histogram(aes(y = total, fill = trap), binwidth = 0.2, alpha = alpha) +
     facet_wrap(vars(trap), ncol = 1) +
     theme(legend.position = "bottom") +
-    coord_flip(ylim = c(0, 30)) +
+    coord_flip(ylim = c(0, 10)) +
     labs(x = "Occurence of Pollen Concentrations", y = "Mean Conc. [#Pollen/m³]")
 
   ggarrange(ggarrange(gg1, gg2, nrow = 2), gg3) %>%

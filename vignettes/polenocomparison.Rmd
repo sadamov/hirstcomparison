@@ -16,8 +16,10 @@ output:
 ```{r}
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLUTION HERE #####
 
+# rmarkdown::render("vignettes/polenocomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
+
 species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+resolution <- "hourly" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst") 
 if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
 
@@ -71,7 +73,7 @@ ggthemr("fresh")
 
 ## Import
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 path_data <- paste0(here::here(), "/ext-data/")
 files_data <- list.files(path_data, pattern = "raw_data")
 
@@ -96,7 +98,7 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
          date = date(timestamp),
          hour = hour(timestamp) + 1,
          trap = paste0("poleno", .y)) %>% 
-  filter(timestamp > ymd_hms("2020-02-19 00:00:00"),
+  filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
          timestamp <= ymd_hms("2020-05-04 00:00:00")))
 
 # data_raw_poleno[[1]] %>% summary
@@ -109,7 +111,7 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
 ```
 
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 # We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
 # We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
 
@@ -119,7 +121,7 @@ data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>%
   as_tibble() %>% 
   select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
   mutate(timestamp = dmy_hm(timestamp)) %>% 
-  filter(timestamp > ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
+  filter(timestamp > ymd_hms("2020-03-01 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
          timestamp <= ymd_hms("2020-05-04 00:00:00")) %>% 
   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
 
@@ -137,7 +139,7 @@ data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>%
 
 ## Imputation / Missing
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 
 # Hour 1 represents the duration 00:00:01 - 01:00:00, and same for all hours up to 24
 data_poleno_hourly <- map(data_poleno,  ~.x %>% 
@@ -165,7 +167,7 @@ data_poleno_hourly %>%
 
 ```
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 
 data_hirst_raw %>% 
   arrange(timestamp) %>% 
@@ -185,20 +187,24 @@ missing_hirst <- data_hirst_prep %>% filter(is.na(total)) %>% pull(timestamp) # 
 
 For the hourly values we rescale the measurements to a range from 0 to 100 for hirst and poleno. The daily values and then based on those hourly averages. For the 3, 6 and 12 hour averages we will scale the resulting pollen counts for the poleno device to a scale from 0 to 100 as well.
 
-```{r eval = FALSE}
+Right now we don't have the official factor to convert the pollen counts into concentrations for Poleno. Probably by chance the counts are already very similar to the pollen per m^3 measured by hirst. I first did this exercise with scaling the time series from each trap and for each temporal aggregation to a scale of 0 to 100. After discussion with the MDS team I tried to apply a simple scaling factor to poleno, so that all time series have the same median. Depending on the research question it might be less impactful to scale the median or to the same min-max. To compare the timeseries with boxplots, it is probably more accurate to rescale each timeseries to a range from 0 to 100 (also because for 3, 6, and 12 hour avg. we don't have a scaling factor based on hirst available). The scaling factor based on the median would actually be quite low.
 
-data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
-data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
-data_hirst_scaled <- scales::rescale(data_hirst_prep$total, c(0, 100))
-data_hirst <- data_hirst_prep %>% 
-  mutate(total = data_hirst_scaled)
+```{r eval = TRUE}
+
+# data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
+# data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
+# data_hirst_scaled <- scales::rescale(data_hirst_prep$total, c(0, 100))
+# data_hirst <- data_hirst_prep %>% 
+#   mutate(total = data_hirst_scaled)
+
+data_hirst <- data_hirst_prep
 
 data_hourly_comb_raw <- data_poleno_hourly %>% 
   bind_rows %>% 
   bind_rows(data_hirst) 
 ```
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 # Calibration was carried out on the Poleno traps during specific time slots (see: https://docs.google.com/document/d/1Eyy7G7D_f_FkovU7Ui_f3e8nbrHRF3GXKJXkU-_JPYQ/edit#) (in UTC?)
 # Those times have to be filtered for at least that specific trap. But, as we will compare traps with each other, it's safest to remove those times from all traps. As we are comparing with hourl averages from Hirst we should probably remove the full hours during which calibration was carried out. Our time series expands from the 15.2.2020 until the 3.5.2020
 
@@ -246,7 +252,9 @@ data_hourly_comb <- data_hourly_comb_raw %>%
 
 I tried to be less strict with removing data for the hourly and daily averages, but the resulting time series show some really large differences between the traps. It is not fair to compare the traps during calibration events and as discussed with Benoit Crouzy, the calibration can sometimes affect the measurements that come directly after. Hence it was suggested to remove the full calibration days. This will be consistent with the preparation for 3 and 6 and 12 hour averages. 
 
-```{r eval = FALSE}
+```{r eval = TRUE}
+
+# # This excludes the full day where calibration events happened. The calib events can distort the measurements even hours after the actual calibration. If one does this a lot of data is excluded from the analysis, but it is the most robust procedure and the same approach was chosen for 3, 6, 12  hour averages (not to do the exclusion of calib events multiple times for different aggregations)
 calib_events <- c(
   "2020-02-18",
   "2020-02-20",
@@ -269,15 +277,16 @@ calib_events <- c(
   "2020-04-21",
   "2020-04-23",
   "2020-03-16"
-) %>% 
+) %>%
   ymd()
 
 
-hourly_calib <- tibble(date = rep(calib_events, each = 24), hour = rep(seq(1, 24, 1), times = length(calib_events))) %>% 
+
+hourly_calib <- tibble(date = rep(calib_events, each = 24), hour = rep(seq(1, 24, 1), times = length(calib_events))) %>%
   mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
          total = NA_real_)
 
-data_hourly_comb <- data_hourly_comb %>% 
+data_hourly_comb <- data_hourly_comb %>%
   mutate(total = if_else(timestamp %in% hourly_calib$timestamp, NA_real_, total))
 ```
  
@@ -286,7 +295,7 @@ data_hourly_comb <- data_hourly_comb %>%
 
 For the daily and hourly values we combine the hirst and poleno measurements. For the 3, 6 and 12hour averages we limit ourselves to the poleno measurements (not available in DWH). To create those 3, 6 and 12hour averages for poleno we will exclude the whole day where calibration was carried out (to be on the safe side). For the hourly averages we exclude the full hour during which calibration was carried out. For the daily averages we assume that enough measurements are available on each day and therefore don't exclude the full day, to have enough datapoints.
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 
 data_daily_comb <- data_hourly_comb %>% 
   mutate(date = if_else(hour == 0, date, date + days(1))) %>%                   
@@ -308,7 +317,7 @@ data_daily_comb <- data_hourly_comb %>%
 
 ```
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 
 data_poleno_red <- map(data_poleno, ~.x %>% 
   filter(!(date %in% calib_events)))
@@ -371,7 +380,7 @@ Let's see whether padding is necessary or whether we have values for all timesta
 We would expect to have a total of 56 days with Poleno measurements that are not affected by calibration.
 Hence we want to see the respective number of measurements for the various averages.
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 # measurement_counts <- (data_poleno_red %>% bind_rows %>% pull(date) %>% unique %>% length) * c(2, 4, 8)
 # 
 # data_hours3_pol %>% group_by(trap) %>% summarise(n = n())
@@ -418,13 +427,16 @@ data_hours6_pol <- map2(data_hours6_pol, c(2, 4, 5), ~.x %>%
 data_hours12_pol <- map2(data_hours12_pol, c(2, 4, 5), ~.x %>% 
       bind_rows(hours12_calib %>% mutate(trap = paste0("poleno", .y))))
 
-data_hours3_comb <- map(data_hours3_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
-  bind_rows() 
-data_hours6_comb <- map(data_hours6_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
-  bind_rows() 
-data_hours12_comb <- map(data_hours12_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
-  bind_rows()
+# data_hours3_comb <- map(data_hours3_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
+#   bind_rows() 
+# data_hours6_comb <- map(data_hours6_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
+#   bind_rows() 
+# data_hours12_comb <- map(data_hours12_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
+#   bind_rows()
 
+data_hours3_comb <- data_hours3_pol %>% bind_rows()
+data_hours6_comb <- data_hours6_pol %>% bind_rows()
+data_hours12_comb <- data_hours12_pol  %>% bind_rows()
 ```
 
 Caching is currently not supported, hence I stored all necessary files locally and load them here.
@@ -432,7 +444,7 @@ Caching is currently not supported, hence I stored all necessary files locally a
 ```{r}
 
 # save(list = c("data_daily_comb", "data_hours12_comb", "data_hours6_comb", "data_hours3_comb", "data_hourly_comb"), file = "data_aggregated.Rdata")
-load("data_aggregated.Rdata")
+# load("data_aggregated.Rdata")
 
 ```
 
@@ -443,8 +455,9 @@ data_hourly_comb %>%
   pivot_wider(names_from = trap, values_from = !!sym(species)) %>% 
   select(all_of(traps)) %>% 
   as.data.frame() %>% 
-  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for All Traps")
+  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for All Traps", )
 ```
+
 
 ## Robustness of Traps / Simultaneous Measurements
 
@@ -457,6 +470,7 @@ Note: It does not matter whether we use the prepared or raw data for this, the o
 data_aggs_comb <- list(data_hourly_comb, data_hours3_comb, data_hours6_comb, data_hours12_comb, data_daily_comb)
 number_of_measurements_comb <- map(data_aggs_comb, ~.x %>% 
   bind_rows %>%   
+  filter(trap %in% traps) %>% 
   replace(is.na(.), 0) %>% 
   mutate(total = total != 0) %>% 
   ungroup %>% 
@@ -498,6 +512,52 @@ number_traps_comb %>%
 
 ```
 
+### Number of Measurements per Hour
+
+```{r eval = TRUE}
+len_traps <- 4 - length(traps[traps != "hirst"])
+set_swatch((swatch() %>% as.character)[-2:(-1-len_traps)])
+
+
+if (!exists("data_raw_poleno")){
+    load("data_poleno.Rdata")
+
+names <- names(data_raw_poleno[[1]])
+names[3] <- "timestamp1"
+names[12] <- "timestamp2"
+names[1] <- "id1"
+names[10] <- "id2"
+names[16] <- "contextVersionId2"
+
+data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>% 
+  setNames(names) %>% 
+  select(classLabel, timestamp) %>% 
+  mutate(timestamp = as_datetime(timestamp),
+         classLabel = as_factor(classLabel),
+         date = date(timestamp),
+         hour = hour(timestamp) + 1,
+         trap = paste0("poleno", .y)) %>% 
+  filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+         timestamp <= ymd_hms("2020-05-04 00:00:00")))
+
+}
+
+data_poleno %>% 
+  bind_rows() %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00"))) %>% 
+  group_by(timestamp, trap) %>% 
+  summarise(n = n()) %>% 
+  ungroup %>% 
+  ggplot(aes(x = n, col = trap)) +
+  stat_ecdf(geom = "step") +
+  labs(title = "Hourly Pollen Count - Averaged per Day", y = "Pollen Count", x = "") +
+  coord_cartesian(xlim = c(0, 1000))
+
+ggthemr("fresh")
+  
+```
+
+
 The Poleno-traps allow to investigate different time-averages very easily. For the Hirst traps we only get 1hour, 3hour and daily averages from the DWH. The 3hour avg were excluded from this analysis because the observations don't appear to be iid (they are calcuated every hour) and the hirst traps were already compared ingreat detail in the hirstcomparison vignette. In the following we investigate the three poleno traps.
 
 # Visualization
@@ -522,6 +582,7 @@ if (resolution == "daily"){
 }
 
 data_anova %>%
+  filter(trap %in% traps) %>% 
   ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
   geom_line() +
   ggtitle(paste(tools::toTitleCase(resolution), "Total Pollen Counts")) +
@@ -659,17 +720,17 @@ gg_ab <- list()
 
 data_altman <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
-    pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
-    setNames(c("timestamp", sort(traps)))
+    pivot_wider(names_from = trap, values_from = !!sym(species)) 
 
 for (i in 1:ncol(traps_pairs)) {
   data_altman <- data_altman %>%
     mutate(
       !!paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")") := if_else(
-        !is.na(!!sym(traps_pairs[1, i])) | !is.na(!!sym(traps_pairs[2, i])),
+        !is.na(!!sym(traps_pairs[1, i])) & !is.na(!!sym(traps_pairs[2, i])),
         rowSums(.[c(grep(paste0("^", traps_pairs[1, i], "$"), names(.)), grep(paste0("^", traps_pairs[2, i], "$"), names(.)))], na.rm = TRUE) / 2,
-        NA_real_
-      ),!!paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")") := !!sym(traps_pairs[1, i]) -!!sym(traps_pairs[2, i])
+        NA_real_),
+      !!paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")") := if_else(
+        !is.na(!!sym(traps_pairs[1, i])) & !is.na(!!sym(traps_pairs[2, i])), !!sym(traps_pairs[1, i]) -!!sym(traps_pairs[2, i]), NA_real_)
     )
 }
 
@@ -709,23 +770,26 @@ I will have a closer look at the differences between poleno 2 and poleno 5. The 
 xlim = c(min(data_altman$timestamp), max(data_altman$timestamp))
 
 gg_hist24 <- data_altman %>% 
-  filter(`diff(poleno2 - poleno4)` > quantile(abs(data_altman$`diff(poleno2 - poleno4)`), 0.75, na.rm = TRUE)) %>% 
+  filter(abs(`diff(poleno2 - poleno4)`) > sd_diff[1]) %>% 
+  mutate(col = if_else(`diff(poleno2 - poleno4)` < 0, "neg", "pos")) %>% 
   ggplot()+
-  geom_histogram(aes(x = timestamp), bins = 50) +
+  geom_histogram(aes(x = timestamp, fill = col), bins = 50, position = "stack") +
   ggtitle("Main Differences Between Poleno 2 and Poleno 4") +
   coord_cartesian(xlim = xlim)
 
 gg_hist25 <- data_altman %>% 
-  filter(`diff(poleno2 - poleno5)` > quantile(abs(data_altman$`diff(poleno2 - poleno4)`), 0.75, na.rm = TRUE)) %>% 
+  filter(abs(`diff(poleno2 - poleno5)`) > sd_diff[1]) %>% 
+  mutate(col = if_else(`diff(poleno2 - poleno5)` < 0, "neg", "pos")) %>% 
   ggplot()+
-  geom_histogram(aes(x = timestamp), bins = 50) +
+  geom_histogram(aes(x = timestamp, fill = col), bins = 50, position = "stack") +
   ggtitle("Main Differences Between Poleno 2 and Poleno 5") +
   coord_cartesian(xlim = xlim)
 
 gg_hist45 <- data_altman %>% 
-  filter(`diff(poleno2 - poleno5)` > quantile(abs(data_altman$`diff(poleno2 - poleno4)`), 0.75, na.rm = TRUE)) %>% 
+  filter(abs(`diff(poleno4 - poleno5)`) > sd_diff[1]) %>% 
+  mutate(col = if_else(`diff(poleno4 - poleno5)` < 0, "neg", "pos")) %>% 
   ggplot()+
-  geom_histogram(aes(x = timestamp), bins = 50) +
+  geom_histogram(aes(x = timestamp, fill = col), bins = 50, position = "stack") +
   ggtitle("Main Differences Between Poleno 4 and Poleno 5") +
   coord_cartesian(xlim = xlim)
 
@@ -1017,7 +1081,7 @@ When using classic estimation methods, even one such outlier might inflate the b
 
 Currently, there are two different methods available for fitting models. They only differ in how the consistency factors for the Design Adaptive Scale estimates are computed. Available fitting methods for theta and sigma. DAStau (default): For this method, the consistency factors are computed using numerical quadrature. This is slower but yields more accurate results. This is the direct analogue to the DAS-estimate in robust linear regression.
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 fit_rlmer <- rlmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
 summary(fit_rlmer)
 
@@ -1118,17 +1182,25 @@ ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = T
 
 ```{r fig.height=8}
 
-conc_groups_scaled <- quantile(data_anova %>% filter(trap != "hirst") %>% pull(total), seq(0, 1, 1/6), na.rm = TRUE)
-conc_groups_names <- paste0("Group", round(seq(0, 1, 1/6)[1:6], 2), "_", round(seq(0, 1, 1/6)[2:7], 2))
+
+len_traps <- 4 - length(traps)
+if (len_traps != 0){
+  set_swatch((swatch() %>% as.character)[-2:(-1-len_traps)])
+}
+
+labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
+names(labels_y) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+names(labels_y_hist) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
 
 data_errors_comb_conc <- data_errors_raw %>% 
   mutate(conc = case_when(
-    mean >= conc_groups_scaled[1] & mean < conc_groups_scaled[2] ~ conc_groups_names[1],
-    mean >= conc_groups_scaled[2] & mean < conc_groups_scaled[3] ~ conc_groups_names[2],
-    mean >= conc_groups_scaled[3] & mean < conc_groups_scaled[4] ~ conc_groups_names[3],
-    mean >= conc_groups_scaled[4] & mean < conc_groups_scaled[5] ~ conc_groups_names[4],
-    mean >= conc_groups_scaled[5] & mean < conc_groups_scaled[6] ~ conc_groups_names[5],
-    mean >= conc_groups_scaled[6] ~ conc_groups_names[6]
+    mean >= 0 & mean < 10 ~ "Group00_10",
+    mean >= 10 & mean < 20 ~ "Group10_20",
+    mean >= 20 & mean < 50 ~ "Group20_50",
+    mean >= 50 & mean < 100 ~ "Group50_100",
+    mean >= 100 & mean < 500 ~ "Group100_500",
+    mean >= 500 ~ "Group500"
   )) %>% 
   pivot_longer(poleno2:poleno5, names_to = "trap") %>% 
   select(timestamp, trap, value, conc) %>% 
@@ -1138,24 +1210,22 @@ data_errors_comb_conc <- data_errors_raw %>%
 gg_conc_dens <- list()
 gg_conc_hist <- list()
 
-labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
-labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
-names(labels_y) <- conc_groups_names
-names(labels_y_hist) <- conc_groups_names
-
-for (j in conc_groups_names){
-  obs <- data_errors_comb_conc %>% 
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+  
+  if (j %in% names(data_errors_comb_conc)){
+    obs <- data_errors_comb_conc %>% 
     filter(!is.na(!!sym(j))) %>% 
     summarise(n()/3) %>% 
     pull 
-  obs <- paste("# of Observations:", obs)
+    obs <- paste("# of Observations:", obs)
   
-  gg_conc_dens[[j]] <- data_errors_comb_conc %>% 
-    filter(!is.na(!!sym(j)))  %>% 
-    ggplot() +
-    geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
-    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]]) +
-    coord_cartesian(xlim = c(0, NA))
+    gg_conc_dens[[j]] <- data_errors_comb_conc %>% 
+      filter(!is.na(!!sym(j)))  %>% 
+      ggplot() +
+      geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
+      geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]]) +
+      coord_cartesian(xlim = c(0, NA))
+  }
 }
 
 gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
@@ -1163,6 +1233,7 @@ gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>%
                   bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
 
 gg_dens_conc
+ggthemr("fresh")
 
 ```
 
@@ -1173,8 +1244,10 @@ For lower concentrations the deviations between the traps becomes quite large, b
 # I manually removed the fitted t-distributions stuff from the plot_hist_dt function for this and then put it back in afterwards.
 gg_hist_conc <- list()
 
-for (j in conc_groups_names){
-  gg_hist_conc[[j]] <- plot_hist_dt(data_errors_comb_conc %>% mutate(type = "dummy"), j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+    if (j %in% names(data_errors_comb_conc)){
+     gg_hist_conc[[j]] <- plot_hist_dt(data_errors_comb_conc %>% mutate(type = "dummy"), j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
+    }
 }
 
 gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>% 
