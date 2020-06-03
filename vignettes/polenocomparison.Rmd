@@ -49,6 +49,9 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
+library(tsibble)
+library(feasts)
+
 # library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
 
 # library(Amelia) # only used for one fct call to missmap()
@@ -1257,6 +1260,174 @@ gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>%
 gg_error_conc
 
 ```
+
+# Auto-Correlation
+
+In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
+I will create a dataset with 5-Minute averages to have the shortest window available as possible.
+There is a paper that showed that auto-correlation is to be expected when measuring pollen concentrations. This is important, because for many statistical methods to compare traps the assumptions would be violated. In addition to that it is interesting to see for how long a certain measurement can affect future measurements (also with regards to implementing the data into the predictive pollen-models in COSMO). For Hirst the autocorrelations were probably never an issue, as the coarse temporal resolution removed any autocorrelation in the data.
+
+```{r fig.width = 10, fig.height = 10}
+
+if (!exists("data_raw_poleno")){
+  load(file = "data_poleno.Rdata")
+  
+  names <- names(data_raw_poleno[[1]])
+  names[3] <- "timestamp1"
+  names[12] <- "timestamp2"
+  names[1] <- "id1"
+  names[10] <- "id2"
+  names[16] <- "contextVersionId2"
+  
+  data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>% 
+    setNames(names) %>% 
+    select(classLabel, timestamp) %>% 
+    mutate(timestamp = as_datetime(timestamp),
+           classLabel = as_factor(classLabel),
+           date = date(timestamp),
+           hour = hour(timestamp) + 1,
+           trap = paste0("poleno", .y)) %>% 
+    filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+           timestamp <= ymd_hms("2020-05-04 00:00:00")))
+}
+
+if (!exists("ts_autocorr_tb")){
+  data_autocorr <- data_poleno[[2]] # Select your trap here
+  
+  start_window <- ymd_hms("2020-03-01 00:00:00")
+  ts_autocorr_tb <- tibble()
+  length_window <- 5
+  
+  while (start_window < ymd_hms("2020-05-04 00:00:00")){
+    end_window <- start_window + minutes(length_window) 
+    count_window <- data_autocorr %>% 
+      filter(between(timestamp, start_window, end_window)) %>% 
+      summarise(n = n()) %>% 
+      pull(n)
+    start_window <- end_window
+    ts_count <- tibble(end_window, count_window)
+    ts_autocorr_tb <- bind_rows(ts_autocorr_tb, ts_count)
+    print(end_window)
+  }
+}
+
+load(file = "data_autocorr.Rdata")
+ts_autocorr_tb <- ts_autocorr_tb %>% 
+  mutate(count_window = log(count_window + 1))
+ts_autocorr <- as_tsibble(ts_autocorr_tb, regular = TRUE)
+
+# For now, the most interesting analysis is the autocorrelation in the time-series. We would also like to understand better if the autocorrelation is physical in nature or introduced by the measurement device. Furthermore we observed that the indexplot changes sign mid-season (in the ANOVA analysis above).
+
+# Timeseries Plot
+
+ts_autocorr_tb %>%
+  ggplot(aes(x = end_window, y = count_window)) +
+  geom_line() +
+  ggtitle("Total Pollen Counts of Poleno4 for 5-Minute Intervals") +
+  labs(x = "Date", y = "Pollen Count per 5-Minute Interval")
+
+# Index-Plot from ANOVA Residuals
+
+gg_timeline2
+
+# Lagged Scatterplot
+
+ts_autocorr_tb %>% 
+  mutate(lag1 = lag(count_window, 1),
+         lag12 = lag(count_window, 12),
+         lag144 = lag(count_window, 144),
+         lag288 = lag(count_window, 288)) %>% 
+  pivot_longer(cols = lag1:lag288, names_to = "lag", values_to = "value") %>% 
+  ggplot(aes(x = count_window, y = value)) +
+  geom_point(alpha = 0.1) +
+  # coord_cartesian(xlim = c(0, 500), ylim = c(0, 500)) +
+  labs(x = "", y = "") +
+  facet_wrap(~ lag)
+
+ts_autocorr %>% gg_lag(count_window, lags = 10)
+
+# Decomposition: As we are only looking at one year of data, decomposition into trend and seasonal effect makes little sense. This would be an interesting exercise for the future though, once we have multiple years of collected Poleno Data. Actually, there might be daily "seasonal" effects that we can filter out. Let's try :-)
+
+dcmp <- ts_autocorr %>%
+  model(STL(count_window ~ season(window = Inf)))
+dcmp_components <- components(dcmp)
+dcmp_components %>% autoplot()
+
+# ACF
+
+poleno_acf <- acf(ts_autocorr_tb$count_window, plot = FALSE, lag.max = 60)
+poleno_acf_df <- with(poleno_acf, data.frame(lag, acf)) %>% slice(-1)
+conf_level <- 0.95
+ciline <- qnorm((1 - conf_level) / 2) / sqrt(nrow(ts_autocorr_tb))
+
+ggplot(data = poleno_acf_df, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) + 
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# poleno_acf_remainder <- acf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+# poleno_acf_df_remainder <- with(poleno_acf_remainder, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% ACF(count_window) %>% autoplot()
+
+# PACF
+
+poleno_pacf <- pacf(ts_autocorr_tb$count_window, plot = FALSE, lag.max = 60)
+poleno_pacf_df <- with(poleno_pacf, data.frame(lag, acf)) %>% slice(-1)
+
+ggplot(data = poleno_pacf_df, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) + 
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+# 
+# poleno_pacf_remainder <- pacf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+# poleno_pacf_df_remainder <- with(poleno_pacf_remainder, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_pacf_df_remainder, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% PACF(count_window) %>% autoplot()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

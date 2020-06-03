@@ -12,3 +12,4 @@ polenocomparison_cache
 figures_tables
 data_aggregated.Rdata
 data_poleno.Rdata
+data_autocorr.Rdata
