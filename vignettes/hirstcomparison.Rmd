@@ -20,7 +20,7 @@ output:
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -30,9 +30,9 @@ knitr::opts_chunk$set(echo = FALSE,
                       error = FALSE, 
                       warning = FALSE, 
                       message = FALSE,
-                      fig.retina =2.5,
+                      fig.retina =3,
                       fig.width = 10,
-                      fig.height = 6,
+                      fig.height = 7,
                       out.width = "100%",
                       out.height = "100%")
 # This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
@@ -482,6 +482,57 @@ number_traps %>%
 
 ```
 
+```{r}
+number_traps <- map(number_of_measurements, ~ bind_rows(.x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 3)),  
+  .x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 2)),
+  .x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 1))) %>% 
+  select(Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
+
+number_of_timesteps <- map(number_traps, ~colSums(.x %>% select(Fraxinus:Total)))
+timesteps_tb <- map(number_of_timesteps, ~bind_rows(.x, .x, .x))
+
+number_traps_perc <- map2(number_traps, timesteps_tb, ~ .x / .y) %>% 
+  map(~.x %>% 
+        mutate_all( ~ scales::percent(round(., 2))) %>%
+        mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured")) %>%
+        select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
+
+number_traps_perc %>% 
+  bind_rows() %>% 
+  kable() %>% 
+  kable_styling("striped") %>% 
+  pack_rows("2-Hour Averages", 1, 3) %>% 
+  pack_rows("3-Hour Averages", 4, 6) %>% 
+  pack_rows("6-Hour Averages", 7, 9) %>% 
+  pack_rows("12-Hour Averages", 10, 12) %>% 
+  pack_rows("Daily Averages", 13, 15) %>% 
+  column_spec(c(1, 6), border_right = TRUE)
+
+  
+  
+
+```
+
+```{r}
+min_measurement <- map(c(list(data_raw, data_hourly), data_aggs), ~.x %>% 
+  bind_rows %>% 
+  select(Total) %>%  
+  filter(Total > 0) %>% 
+  min())
+
+min_measurement_tb <- tibble(Min_Measurement = min_measurement %>% unlist() %>% round(2),
+                             Resolution = c("10-Minutes", "Hourly", "2-Hour", "3-Hour", "6-Hour", "12-Hour", "Daily"))
+min_measurement_tb %>% 
+  kable %>% 
+  kable_styling("striped", full_width = FALSE)
+
+```
+
+
+
 So it seems that it actually happens often that only a fraction of the traps is measuring pollen. It can be expected that the discrepancies mostly occur during times with low pollen concentrations. For that reason, we can filter everything below 10 pollen /m^3 and see how the percentages change. But the results don't change dramatically after doing so.
 
 
@@ -564,7 +615,7 @@ occurence_raw %>%
   arrange(desc(trap8.y.y)) %>% 
   setNames(c("Name", rep(paste0("trap", c(2, 4, 8)), times = 4))) %>% 
   kable(escape = FALSE) %>%
-  kable_styling(c("striped", "condensed"), full_width = FALSE) %>% 
+  kable_styling(c("striped", "condensed"), full_width = FALSE, font_size = 20) %>% 
   add_header_above(c(" " = 1, "Frequency of Occurence [#Days]" = 3, "Maximum Daily Concentration [#Pollen/m³]" = 3, "Average Daily Concentration [#Pollen/m³]" = 3, "Seasonal Pollen Integral [#Pollen/m³]" = 3)) %>% 
   column_spec(1, italic = TRUE) %>% 
   column_spec(2:13, width = "2.5cm") %>% 
@@ -579,7 +630,7 @@ Typically we see that trap 8 shows higher measurements for a variety of species.
 
 Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window.
 
-```{r fig.height=7, fig.width=15}
+```{r }
 
 gg_comparison <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE, combined = TRUE)
 
@@ -687,8 +738,8 @@ corr_matrix <- map(methods, ~corr.test(
 
 ```
 
-```{r}
-
+```{r }
+ggthemr("fresh")
 ci <- map(corr_matrix, ~.x %>% 
   pluck(10)) %>% 
   bind_rows() %>% 
@@ -700,17 +751,17 @@ ci <- map(corr_matrix, ~.x %>%
 gg1 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap4)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
+  geom_smooth(data = data_corr %>% filter(trap2 != 0), alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 3.6, y = 9)) +
+  geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 6, y = 1)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg2 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap8)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
+  geom_smooth(data = data_corr %>% filter(trap2 != 0), alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 3.6, y = 9)) +
+  geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 6, y = 1)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg3 <- data_corr %>% 
@@ -718,7 +769,7 @@ gg3 <- data_corr %>%
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 3.6, y = 9)) +
+  geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 6, y = 1)) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
@@ -735,7 +786,7 @@ gg_corr
 
 The well established AB-method for clinical trials can be used here as well to compare the means and differences between traps. Again we see that trap 8 generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence the traps can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
 
-```{r fig.height=9}
+```{r}
 
 data_altman <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
@@ -803,7 +854,7 @@ gg_ab
 #### For Different Minimum Concentration-Thresholds
 
 
-```{r fig.height=9, eval = FALSE}
+```{r eval = FALSE}
 
 gg_ab_threshold <- list()
 
@@ -1001,7 +1052,7 @@ Assumptions:
 https://en.Wikipedia.org/wiki/Tukey%27s_range_test
 
 ```{r}
-hsd <- TukeyHSD(fit_anova)
+hsd <- TukeyHSD(fit_anova) # This version of Tukey with one-way anova actually shows the differences in the mean
 plot(hsd)
 ```
 
@@ -1110,9 +1161,20 @@ dunn.test::dunn.test(data_transformed %>% pull(!!sym(species)),
                      data_transformed$trap,
                      method = "holm") # Try different FEWR /FDR adjustments here
 
+hirst_npar_contrasts <- nparcomp::nparcomp(as.formula(paste(species, "~ trap")), data_transformed, conf.level = 0.95, alternative = "two.sided", type = "Tukey") # ANOVA and regression compare means, while WMW methods calculate the probability that a member of one group will score higher than a member of another group. Being sensitive to differences in the shape of the distribution, which Bruce points out, is not an adverse side-effect. It is the actual purpose of the test, because differences in distribution shape will lead to members of one group out-scoring members of another. https://www.researchgate.net/post/Which_post_hoc_test_is_best_to_use_after_Kruskal_Wallis_test
+
+gg_contrasts <- hirst_npar_contrasts$Analysis %>% 
+  ggplot(aes(x = Estimator, y = Comparison)) +
+  geom_point() +
+  geom_errorbarh(aes(xmax = Upper, xmin = Lower)) +
+  geom_label(aes(label = paste("p-Value:", round(p.Value, 2))), nudge_y = 0.2) +
+  ggtitle(paste0("Robust Tukey Contrasts for ", tools::toTitleCase(resolution), "-Averages of All Three Traps"))
+
 conover.test::conover.test(data_transformed %>% pull(!!sym(species)),
                      data_transformed$trap,
                      method = "holm")
+
+gg_contrasts
 
 ```
 
@@ -1313,8 +1375,9 @@ data_errors <- measurements_after_exclusion %>%
 
 ```
 
+### Concentration Groups
 
-```{r fig.height=8}
+```{r }
 data_errors_conc_raw <- data_errors_raw %>% 
   select(-type) %>%
   pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
@@ -1391,8 +1454,7 @@ gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>%
 
 ```
 
-
-```{r fig.height=8, eval = FALSE}
+```{r eval = FALSE}
 for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
   obs <- data_errors_conc_raw %>% 
     filter(!is.na(!!sym(j))) %>% 
@@ -1416,20 +1478,43 @@ ggarrange(plotlist = gg_conc_hist, nrow = 3, ncol = 2) %>%
 
 ```
 
-```{r }
-
-# I manually removed the fitted t-distributions stuff from the plot_hist_dt function for this and then put it back in afterwards.
-
-gg_hist_species <- list()
-gg_hist_groups <- list()
+```{r fig.height=7, fig.width=10}
 gg_hist_conc <- list()
 
+
+conc_y_label <- c(2, 1, 0.8, 1, 1.1, 1.2) # This has to be adjusted depending on the temporal averaging window. You could probably find a smart rule, I just did not find it :-)
+names(conc_y_label) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+  gg_hist_conc[[j]] <- plot_hist_dt(data_errors_conc, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE, y_label = conc_y_label[j])
+}
+
+data_errors_conc %>% select(Group10_20) %>% unique
+
+gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+```
+
+### Species
+
+```{r}
+gg_hist_species <- list()
 
 for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")){
   gg_hist_species[[j]] <- plot_hist_dt(data_errors, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
 }
 gg_error_species <- ggarrange(plotlist = gg_hist_species, nrow = 3, ncol = 2) %>% 
   annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Top-6 Species"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+```
+
+
+### Pollen Grain Size Groups
+
+```{r }
+
+# I manually removed the fitted t-distributions stuff from the plot_hist_dt function for this and then put it back in afterwards.
+
+gg_hist_groups <- list()
 
 for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
   gg_hist_groups[[j]] <- plot_hist_dt(data_errors, species = j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
@@ -1437,13 +1522,6 @@ for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
 gg_error_size <- ggarrange(plotlist = gg_hist_groups, nrow = 3, ncol = 2) %>% 
   annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Five Pollen Size Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
 
-
-for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
-  gg_hist_conc[[j]] <- plot_hist_dt(data_errors_conc, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
-}
-
-gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
 
 ```
 
@@ -1455,7 +1533,7 @@ Some of the following metrics only make sense with daily averages. Hence the dai
 
 ## For Different Species
 
-```{r fig.height=6, eval = FALSE}
+```{r eval = FALSE}
 # set.seed(123)
 data_sampling <- data_errors
 
@@ -1476,7 +1554,7 @@ ggarrange(plotlist = gg_hist_species, nrow = 3, ncol = 2) %>%
 ```
 
 
-```{r fig.height=8, eval = FALSE}
+```{r eval = FALSE}
 
 # The sampled errors from above are differences of each trap from the common mean (logarithmic).
 # To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
@@ -1494,7 +1572,7 @@ ggarrange(plotlist = gg_spi_species, ncol = 1) %>%
 ```
 
 
-```{r fig.height=7, eval = FALSE}
+```{r eval = FALSE}
 
 days <- data_sampling_raw %>% select(timestamp) %>% pull %>% unique
 
@@ -1549,7 +1627,7 @@ ggarrange(plotlist = gg_season_start[-6], ncol = 2, nrow = 3) %>%
 
 ## For Different Pollen Size Groups
 
-```{r fig.height=6, eval = FALSE}
+```{r eval = FALSE}
 # set.seed(123)
 
 ggthemr("fresh")
@@ -1569,7 +1647,7 @@ ggarrange(plotlist = gg_hist_groups, nrow = 3, ncol = 2) %>%
 
 ```
 
-```{r fig.height=9, eval = FALSE}
+```{r eval = FALSE}
 
 # The sampled errors from above are differences of each trap from the common mean (logarithmic).
 # To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
@@ -1593,7 +1671,7 @@ annotate_figure(top = "Boxplot of Sampled SPI for Pollen Size Groups",
 ## For Different Pollen-Concentrations
 
 
-```{r fig.height=6, eval = FALSE}
+```{r eval = FALSE}
 # set.seed(123)
 
 ggthemr("fresh")
@@ -1611,7 +1689,7 @@ ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>%
                   bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
 ```
 
-```{r fig.height=9, eval = FALSE}
+```{r eval = FALSE}
 
 # The sampled errors from above are differences of each trap from the common mean (logarithmic).
 # To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
@@ -1658,22 +1736,23 @@ http://www.jerrydallal.com/LHSP/compare.htm
 
 # Plots for Paper
 
-```{r}
+```{r eval = FALSE}
 
 # The Sysadmin does not allow to save kabel as png (need phantomjs), hence the tables were saved manually.
 # The GG-Plots are being saved right here:
 
 #### PER SPECIES AND TEMPORAL AVERAGE
-ggsave("figure1_timeseries_boxplot_hist.png", gg_comparison, width = 9, height = 6, dpi = 300)
-ggsave("figure2_timeseries.png", gg_timeseries, width = 9, height = 6, dpi = 300)
-ggsave("figure3_correlation.png", gg_corr, width = 12, height = 8, dpi = 300)
-ggsave("figure4_altman_bland.png", gg_ab, width = 12, height = 8, dpi = 300)
+ggsave("figure1_timeseries_boxplot_hist.png", gg_comparison, width = 10, height = 7, dpi = 300)
+ggsave("figure2_timeseries.png", gg_timeseries, width = 10, height = 7, dpi = 300)
+ggsave("figure3_correlation.png", gg_corr, width = 10, height = 7, dpi = 300)
+ggsave("figure4_altman_bland.png", gg_ab, width = 10, height = 7, dpi = 300)
+ggsave("figure9_pairwise_contrasts.png", gg_contrasts, width = 10, height = 7, dpi = 300)
 
 #### PER TEMPORAL AVERAGE
-ggsave("figure5_error_hist_species.png", gg_error_species, width = 12, height = 8, dpi = 300)
-ggsave("figure6_error_hist_size.png", gg_error_size, width = 12, height = 8, dpi = 300)
-ggsave("figure7_error_hist_conc.png", gg_error_conc, width = 12, height = 8, dpi = 300)
-ggsave("figure8_measurement_differences_conc_groups.png", gg_dens_conc, width = 12, height = 8, dpi = 300)
+ggsave("figure5_error_hist_species.png", gg_error_species, width = 10, height = 7, dpi = 300)
+ggsave("figure6_error_hist_size.png", gg_error_size, width = 10, height = 7, dpi = 300)
+ggsave("figure7_error_hist_conc.png", gg_error_conc, width = 10, height = 7, dpi = 300)
+ggsave("figure8_measurement_differences_conc_groups.png", gg_dens_conc, width = 10, height = 7, dpi = 300)
 ```
 
 

@@ -75,7 +75,7 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
     data_plot <-data_hourly
   }
 
-  data_plot <- map(data_plot, ~.x %>%
+  data_plot <- map(data_daily, ~.x %>%
     mutate(timestamp = ymd_hm(paste0(date, hour))))
 
   data_plot <- data_plot %>%
@@ -90,6 +90,11 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
       summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>%
       ungroup
   }
+
+  sd_hirst <- data_plot %>%
+         group_by(trap) %>%
+         summarise(sd = sd(!!sym(species), na.rm = TRUE))
+
 
   gg1 <- data_plot %>%
     ggplot(aes(x = timestamp)) +
@@ -107,7 +112,8 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
 
   gg3 <- data_plot %>%
     ggplot() +
-    geom_histogram(aes(y = log10(!!sym(species)), fill = !!sym(group)), alpha = alpha) +
+    geom_histogram(aes(y = log10(!!sym(species)), fill = !!sym(group)), alpha = alpha, binwidth = 0.1) +
+    geom_label(data = sd_hirst, aes(label = paste("Standard Deviation:\n", round(sd), "Pollen / m³"), x = 8, y = 3.3, group = !!sym(group)), size = 3) +
     facet_wrap(vars(!!sym(group)), ncol = 1) +
     theme(legend.position = "bottom") +
     coord_flip() +
@@ -245,10 +251,11 @@ plot_spi <- function(data, species, samples, n = 1000, xlim = c(0, 3.5e4)){
 #' @param samples Number of samples created for each day
 #' @param plots If plots is TRUE, histogram and density plots are returned, if FALSE the fct returns sampled daily values
 #' @param tdist Should a t distribution be fitted to the data?
+#' @param ylabel Where on the y-axis should the label be plotted
 #'
 #' @return A list of ggplots
 
-plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FALSE, tdist = TRUE){
+plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FALSE, tdist = TRUE, y_label = 2){
 
   ggthemr("fresh")
 
@@ -293,12 +300,17 @@ plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FAL
     }
   }
 
-
+  obs_tb <- tibble(obs = errors %>%
+         filter(!is.na(error)) %>%
+         nrow() / 3,
+         x = 1.7,
+         y = y_label) # Number of Traps
 
   gg <- errors %>%
     ggplot(aes(x=error, y = ..density..)) +
     geom_histogram(binwidth = 0.05) +
     geom_density(col = swatch()[4]) +
+    geom_label(data = obs_tb, aes(label = paste("Observations:", obs), x = x, y = y)) +
     geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
     coord_cartesian(xlim = c(0, 2)) +
     labs(x = paste("Error", species))
