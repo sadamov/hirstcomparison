@@ -31,6 +31,8 @@ Imports:
     Amelia,
     data.table,
     dunn.test,
-    conover.test
+    conover.test,
+    tsibble,
+    feasts
 VignetteBuilder: knitr
 RoxygenNote: 7.1.0
