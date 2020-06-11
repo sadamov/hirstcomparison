@@ -19,7 +19,7 @@ output:
 
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
-species <- "Total"
+species <- "Betula"
 resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
@@ -330,9 +330,7 @@ data_hourly_raw <- map(data_raw, ~.x %>%
   group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
-
 data_hourly <- set_na(data_hourly_raw)
-
 
 data_hours2_raw <- map(data_raw, ~.x %>% 
   mutate(hms = format(datetime, "%H:%M:%S"),
@@ -432,7 +430,7 @@ As described above there are two main options to prepare the data (otherwise we 
 Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
 
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 
 data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
 number_of_measurements <- map(data_aggs, ~.x %>% 
@@ -482,7 +480,7 @@ number_traps %>%
 
 ```
 
-```{r}
+```{r eval = TRUE}
 number_traps <- map(number_of_measurements, ~ bind_rows(.x %>% 
     summarise_at(vars(all_of(species_selection), Total), ~sum(. == 3)),  
   .x %>% 
@@ -744,16 +742,19 @@ ci <- map(corr_matrix, ~.x %>%
   pluck(10)) %>% 
   bind_rows() %>% 
   round(2) %>% 
-  mutate(method = rep(methods, each = 3)) %>%  
-  mutate(ci = paste0("R-", tools::toTitleCase(method), ": ", lower.adj, " - ", upper.adj)) %>% 
-  pull(ci)
+  mutate(method = rep(methods, each = 3),
+         metric = rep(c("R-", "rho-", "tau-"), each = 3),
+         ci = tools::toTitleCase(paste0(metric, method, ": ", lower.adj, " - ", upper.adj)),
+         traps = rep(c(24, 28, 48), times = 3),
+         x = rep(c(3.5, 3.7, 3.3), each = 3),
+         y = rep(c(9, 8.5, 8), each = 3))
 
 gg1 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap4)) + 
   geom_point(alpha = 0.3) +
   geom_smooth(data = data_corr %>% filter(trap2 != 0), alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 6, y = 1)) +
+  geom_label(data = ci %>% filter(traps == 24), aes(label = ci, x = x, y = y), parse = TRUE) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg2 <- data_corr %>% 
@@ -761,7 +762,7 @@ gg2 <- data_corr %>%
   geom_point(alpha = 0.3) +
   geom_smooth(data = data_corr %>% filter(trap2 != 0), alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 6, y = 1)) +
+  geom_label(data = ci %>% filter(traps == 28), aes(label = ci, x = x, y = y), parse = TRUE) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg3 <- data_corr %>% 
@@ -769,7 +770,7 @@ gg3 <- data_corr %>%
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 6, y = 1)) +
+  geom_label(data = ci %>% filter(traps == 48), aes(label = ci, x = x, y = y), parse = TRUE) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
@@ -850,6 +851,52 @@ gg_ab
   
 
 ```
+
+```{r}
+data_altman_adj <- data_transformed %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+  mutate(mean248 = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
+                        rowSums(.[2:4], na.rm = TRUE) / 3, 
+                        NA_real_),
+         diff2 = trap2 - mean248,
+         diff4 = trap4 - mean248,
+         diff8 = trap8 - mean248) %>% 
+  pivot_longer(diff2:diff8, names_to = "trap", values_to = "diff")
+
+gg_ab_adj <- data_altman_adj %>% 
+  ggplot(aes(x = mean248, y = diff, col = trap)) +
+  geom_point(alpha = 0.25) +
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(Trap_i - Mean)", x = "Mean(trap2, trap4, trap8)") +
+  ggtitle("Difference of Individual 2-Hour Measurements from Each Trap\nand the Common Mean")
+
+data_altman_adj_exp <- data_transformed %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+  mutate(mean248 = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
+                        rowSums(.[2:4], na.rm = TRUE) / 3, 
+                        NA_real_),
+         diff2 = trap2 - mean248,
+         diff4 = trap4 - mean248,
+         diff8 = trap8 - mean248) %>% 
+  pivot_longer(diff2:diff8, names_to = "trap", values_to = "diff") %>% 
+  mutate(diff = exp(diff),
+         mean248 = exp(mean248))
+
+gg_ab_adj_exp <- data_altman_adj %>% 
+  ggplot(aes(x = mean248, y = diff, col = trap)) +
+  geom_point(alpha = 0.25) +
+  geom_smooth(alpha = 0.1) +
+  coord_cartesian(ylim = c(0, 4)) +
+  labs(y = "Difference(Trap_i - Mean)", x = "Mean(trap2, trap4, trap8)") +
+  ggtitle("Difference of Individual 2-Hour Measurements from Each Trap\nand the Common Mean")
+  
+gg_ab_adj
+```
+
 
 #### For Different Minimum Concentration-Thresholds
 
@@ -1175,6 +1222,7 @@ conover.test::conover.test(data_transformed %>% pull(!!sym(species)),
                      method = "holm")
 
 gg_contrasts
+citation("nparcomp")
 
 ```
 

@@ -139,7 +139,7 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
 plot_comb <- function(resolution, traps, rm_zeros){
 
   # If needed one can add ifelse clauses here to make function more robust
-  title <- tools::toTitleCase(paste0(resolution, " average concentrations of total pollen for trap(s): ", paste(traps, collapse = ", ")))
+  title <- tools::toTitleCase(paste0(resolution, " average concentrations of ", species, " pollen for trap(s): ", paste(traps, collapse = ", ")))
   alpha <- 0.5
 
   # The first plot needs actual datetimes for the x-axis, hence we need some complicated if statements
