@@ -19,8 +19,8 @@ output:
 
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
-species <- "Betula"
-resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+species <- "Total"
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -1226,6 +1226,9 @@ citation("nparcomp")
 
 ```
 
+
+
+
 For Donover the ECDF curves are not allow to cross each other. This is actually not given for quite a few species and averaging windows. Maybe it's safer to use Dunn's test (they were usually comparable in terms of the return P-value statistics).
 
 ```{r}
@@ -1783,6 +1786,175 @@ Geometric mean regression, reduced major axis regression take into account that 
 http://www.jerrydallal.com/LHSP/compare.htm
 
 # Plots for Paper
+
+## Contrasts
+
+```{r}
+
+fit_anova_contr <- list()
+hsd_contr <- list()
+hsd_per_res <- list()
+npar_contr <- list()
+npar_contr_res <- list()
+
+names(data_aggs) <- c("data_hours2", "data_hours3", "data_hours6", "data_hours12", "data_daily")
+
+data_anova_contr <- map(data_aggs, ~map(.x, ~.x %>%
+  mutate(timestamp = ymd_hm(paste0(date, hour)))))
+
+data_contr <- map(data_anova_contr, ~.x %>% 
+  bind_rows() %>% 
+  mutate(trap = as.factor(trap)) %>% 
+  group_by(trap, timestamp) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+  ungroup)
+
+data_contr_tf <- map(data_contr, ~.x %>% 
+  mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~log(. + 1)))
+
+species_contr <- c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")
+
+# Parametric
+
+for (i in species_contr){
+  fit_anova_contr[[i]] <- map(data_contr_tf, ~aov(as.formula(paste(i, "~ trap")), data = .x, contrasts = c("contr.sum", "contr.poly")))  
+  hsd_contr[[i]] <- map(fit_anova_contr[[i]], ~TukeyHSD(.x))
+  hsd_per_res[[i]] <- map(hsd_contr[[i]], ~.x[["trap"]])
+  
+  # npar_contr[[i]] <- map(data_contr_tf, ~nparcomp::nparcomp(as.formula(paste(i, "~ trap")), data = .x, conf.level = 0.95, alternative = "two.sided", type = "Tukey"))
+  # npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
+}
+
+data_contr_tf[[1]]
+
+number_obs_contr <- map(data_contr_tf, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
+
+species_contr_sel <- "Fraxinus"
+title_contr <- paste(species_contr_sel, "Pollen Concentrations")
+header_contr <- c(title_contr = 5)
+names(header_contr) <- title_contr
+
+hsd_per_res %>% 
+  extract2(species_contr_sel) %>% # Specify Resolution Here
+  map( ~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(res = rep(names(data_aggs), each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 5)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj") %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[species_contr_sel]])) %>% 
+  add_header_above(header_contr)
+
+# 
+# npar_contr_res %>% 
+#   extract2("Total") %>% # Specify Resolution Here
+#   bind_rows() %>% 
+#   mutate_if(is.numeric, round, 3) %>% 
+#   mutate(res = rep(names(data_aggs), each = 3)) %>% 
+#   select(Traps = Comparison, Estimator, Lower, Upper, "p-Value" = "p.Value") %>% 
+#   kable() %>% 
+#   kable_styling("striped", full_width = FALSE) %>% 
+#     pack_rows(start_row = 1, end_row = 3, group_label = "2-Hour Averages") %>% 
+#     pack_rows(start_row = 4, end_row = 6, group_label = "3-Hour Averages") %>% 
+#     pack_rows(start_row = 7, end_row = 9, group_label = "6-Hour Averages") %>% 
+#     pack_rows(start_row = 10, end_row = 12, group_label = "12-Hour Averages") %>% 
+#     pack_rows(start_row = 13, end_row = 15, group_label = "Daily Averages")
+
+```
+
+```{r}
+
+fit_anova_contr <- list()
+hsd_contr <- list()
+hsd_per_res <- list()
+npar_contr <- list()
+npar_contr_res <- list()
+
+data_contr_conc <- map(data_contr_tf, ~.x %>% 
+  select(-Total:-Group5) %>% 
+  pivot_longer(Castanea:Picea) %>% 
+  pivot_wider(names_from = trap) %>% 
+  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
+  mutate(mean = (trap2 + trap4 + trap8)/3) %>% 
+  filter(!is.na(mean)) %>% 
+  pivot_longer(trap2:trap8, names_to = "trap") %>% 
+  mutate(conc = case_when(
+    mean >= log(0) & mean < log(10) ~ "Group0_10",
+    mean >= log(10) & mean < log(20) ~ "Group10_20",
+    mean >= log(20) & mean < log(50) ~ "Group20_50",
+    mean >= log(50) & mean < log(100) ~ "Group50_100",
+    mean >= log(100) & mean < log(500) ~ "Group100_500",
+    mean >= log(500) ~ "Group500"
+  )) %>% 
+  select(timestamp, trap, value, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = value))
+
+
+species_contr <- c("Group0_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+
+# Parametric
+
+for (i in species_contr){
+  fit_anova_contr[[i]] <- map(data_contr_conc, ~aov(as.formula(paste(i, "~ trap")), data = .x, contrasts = c("contr.sum", "contr.poly")))  
+  hsd_contr[[i]] <- map(fit_anova_contr[[i]], ~TukeyHSD(.x))
+  hsd_per_res[[i]] <- map(hsd_contr[[i]], ~.x[["trap"]])
+  # 
+  # npar_contr[[i]] <- map(data_contr_conc, ~nparcomp::nparcomp(as.formula(paste(i, "~ trap")), data = .x  %>% filter(!is.na(!!sym(i))), conf.level = 0.95, alternative = "two.sided", type = "Tukey"))  
+  # npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
+}
+
+# There is an unsolved error in the nparcomp source-code: https://stackoverflow.com/questions/24047659/dataset-limitation-in-r-package-nparcomp
+
+number_obs_contr <- map(data_contr_conc, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
+min_group <- 0
+max_group <- 10
+conc_group <- paste0("Group", min_group, "_", max_group)
+title_contr <- paste0("Concentration Group from ", min_group, " (", round(log(min_group), 2), ") to ", max_group, " (", round(log(max_group), 2), ")")
+header_contr <- c(title_contr = 5)
+names(header_contr) <- title_contr
+
+hsd_per_res %>% 
+  extract2(conc_group) %>% # Specify Resolution Here
+  map( ~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(res = rep(names(data_aggs), each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 5)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj") %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[conc_group]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[conc_group]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[conc_group]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[conc_group]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[conc_group]])) %>% 
+  add_header_above(header = header_contr)
+
+
+# npar_contr_res %>% 
+#   extract2("Total") %>% # Specify Resolution Here
+#   bind_rows() %>% 
+#   mutate_if(is.numeric, round, 3) %>% 
+#   mutate(res = rep(names(data_aggs), each = 3)) %>% 
+#   select(Traps = Comparison, Estimator, Lower, Upper, "p-Value" = "p.Value") %>% 
+#   kable() %>% 
+#   kable_styling("striped", full_width = FALSE) %>% 
+#     pack_rows(start_row = 1, end_row = 3, group_label = "2-Hour Averages") %>% 
+#     pack_rows(start_row = 4, end_row = 6, group_label = "3-Hour Averages") %>% 
+#     pack_rows(start_row = 7, end_row = 9, group_label = "6-Hour Averages") %>% 
+#     pack_rows(start_row = 10, end_row = 12, group_label = "12-Hour Averages") %>% 
+#     pack_rows(start_row = 13, end_row = 15, group_label = "Daily Averages")
+
+```
+
+
+## Exports
 
 ```{r eval = FALSE}
 
