@@ -58,7 +58,7 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
 
   # If needed one can add ifelse clauses here to make function more robust
   title <- tools::toTitleCase(paste0(resolution, " average concentrations of ", species, " Pollen per ", group, " for trap(s) number ", paste(traps, collapse = ", ")))
-  alpha <- 0.5
+  alpha_hirst <- 0.5
 
   # The first plot needs actual datetimes for the x-axis, hence we need some complicated if statements
   if (resolution == "daily"){
@@ -88,7 +88,8 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
     data_plot <- data_plot %>%
       group_by(trap, timestamp) %>%
       summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>%
-      ungroup
+      ungroup %>%
+      mutate(trap = as.factor(trap))
   }
 
   sd_hirst <- data_plot %>%
@@ -98,30 +99,31 @@ plot_hirst <- function(species, resolution, group, traps, rm_zeros, combined){
 
   gg1 <- data_plot %>%
     ggplot(aes(x = timestamp)) +
-    geom_line(aes(y = !!sym(species), col = !!sym(group)), alpha = alpha) +
+    geom_line(aes(y = !!sym(species), col = !!sym(group)), alpha = alpha_hirst) +
     theme(legend.position = "none") +
-    labs(y = "Mean Conc. [#Pollen/m³]", x = "")
+    labs(y = "Mean Conc. [Pollen/m³]", x = "")
 
   gg2 <- data_plot %>%
     ggplot() +
-    geom_boxplot(aes(y = log10(!!sym(species)), fill = !!sym(group)), alpha = alpha) +
+    geom_boxplot(aes(y = log10(!!sym(species)), fill = !!sym(group)), alpha = alpha_hirst) +
     theme(legend.position = "none",
           axis.ticks.x = element_blank(),
           axis.text.x = element_blank()) +
-    labs(y = "Log Mean Conc. [#Pollen/m³]", x = "")
+    labs(y = "Log Mean Conc. [Pollen/m³]", x = "")
 
   gg3 <- data_plot %>%
     ggplot() +
-    geom_histogram(aes(y = log10(!!sym(species)), fill = !!sym(group)), alpha = alpha, binwidth = 0.1) +
+    geom_histogram(aes(y = log10(!!sym(species)), fill = !!sym(group)), alpha = alpha_hirst, binwidth = 0.1) +
     geom_label(data = sd_hirst, aes(label = paste("Standard Deviation:\n", round(sd), "Pollen / m³"), x = 8, y = 3.3, group = !!sym(group)), size = 3) +
     facet_wrap(vars(!!sym(group)), ncol = 1) +
     theme(legend.position = "bottom") +
     coord_flip() +
-    labs(x = "Occurence of Pollen Concentrations", y = "Log Mean Conc. [#Pollen/m³]")
+    labs(x = "Occurence of Pollen Concentrations", y = "Log Mean Conc. [Pollen/m³]")
 
   if (!combined) {
     list(gg1 + ggtitle(title), gg2 + ggtitle(title), gg3 + ggtitle(title))
   } else {
+    ggthemr("fresh")
     ggarrange(ggarrange(gg1, gg2, nrow = 2), gg3) %>%
       annotate_figure(top = title)
   }
@@ -303,6 +305,7 @@ plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FAL
   obs_tb <- tibble(obs = errors %>%
          filter(!is.na(error)) %>%
          nrow() / 3,
+         sd = sprintf("%.2f", round(sd(errors$error, na.rm = TRUE), 2), 2),
          x = 1.7,
          y = y_label) # Number of Traps
 
@@ -310,10 +313,10 @@ plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FAL
     ggplot(aes(x=error, y = ..density..)) +
     geom_histogram(binwidth = 0.05) +
     geom_density(col = swatch()[4]) +
-    geom_label(data = obs_tb, aes(label = paste("Observations:", obs), x = x, y = y)) +
+    geom_label(data = obs_tb, aes(label = paste("Observations:", obs, "\n SD:", sd), x = x, y = y)) +
     geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
     coord_cartesian(xlim = c(0, 2)) +
-    labs(x = paste("Error", species))
+    labs(x = species)
   if (plots){
     if (tdist){
       if (class(t_shape) != "try-error"){
