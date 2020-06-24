@@ -16,8 +16,10 @@ output:
 ```{r}
 ##### PLEASE DEFINE SPECIES AND TEMPORAL RESOLUTION HERE #####
 
-species <- "total" # Total is the only option currently, as poleno classifier is not yet functional
-resolution <- "3hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
+# rmarkdown::render("vignettes/polenocomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
+
+species <- "total" # Total is the only option currently, as poleno classifier is not yet functional c("total", "alnus", "corylus", "taxus", "ulmus", "cupressus" "betula",  "populus", "poaceae", "fraxinus"  "platanus"  "quercus", "fagus", "pinaceae", "carpinus")
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst") 
 if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
 
@@ -47,6 +49,9 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
+library(tsibble)
+library(feasts)
+
 # library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
 
 # library(Amelia) # only used for one fct call to missmap()
@@ -60,7 +65,6 @@ devtools::load_all()
 # devtools::install_github('cttobin/ggthemr')
 # library(ggthemr)
 ggthemr("fresh")
-
 # caTools and bitops are required to knit this vignette, those are not tracked by renv and must be installed by the user
 # Due to old R-Version caTools must be installed from CRAN Archive, in order to knit markdown documents.
 # packageurl <- "http://cran.r-project.org/src/contrib/Archive/caTools/caTools_1.17.1.1.tar.gz"
@@ -72,31 +76,34 @@ ggthemr("fresh")
 
 ## Import
 
-```{r cache = TRUE, cache.lazy = FALSE}
+```{r eval = TRUE}
 path_data <- paste0(here::here(), "/ext-data/")
-files_data <- list.files(path_data, pattern = "raw_data")
+files_data <- list.files(path_data, pattern = "second")
 
 data_raw_poleno <-
-  map(files_data, ~ data.table::fread(paste0(path_data, .x))) %>% 
+  map(files_data, ~ data.table::fread(paste0(path_data, .x))) %>%
   setNames(files_data)
 
-names <- names(data_raw_poleno[[1]])
-names[3] <- "timestamp1"
-names[12] <- "timestamp2"
-names[1] <- "id1"
-names[10] <- "id2"
-names[16] <- "contextVersionId2"
-
-data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>% 
-  setNames(names) %>% 
-  select(classLabel, timestamp) %>% 
+data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
+  select(prediction_max_value, prediction_label, timestamp) %>%
   mutate(timestamp = as_datetime(timestamp),
-         classLabel = as_factor(classLabel),
+         prediction_label = as_factor(prediction_label),
          date = date(timestamp),
          hour = hour(timestamp) + 1,
-         trap = paste0("poleno", .y)) %>% 
-  filter(timestamp > ymd_hms("2020-02-19 00:00:00"),
-         timestamp <= ymd_hms("2020-05-03 23:00:00")))
+         trap = paste0("poleno", .y)) %>%
+  filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+         timestamp <= ymd_hms("2020-05-08 00:00:00")))
+
+if (species != "total"){
+  data_poleno <- map(data_poleno, ~.x %>% 
+                             filter(prediction_label == species
+                                    , prediction_max_value >= 0.7 # This is a simple approximation as Payerne (Gian) was still working on the classifier optimization.
+  ))
+}
+
+# save(data_raw_poleno, file = "data_raw_poleno.Rdata")
+# load(file = "data_poleno.Rdata")
+
 
 # data_raw_poleno[[1]] %>% summary
 # summary(data_poleno[[1]])
@@ -108,7 +115,7 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
 ```
 
 
-```{r cache = TRUE, cache.lazy = FALSE}
+```{r eval = TRUE}
 # We should import the same data from the DWH. The CATs don't work on windows or in a renv session (very well), so I exported the data using climap and stored it in the ext-data folder. 
 # We need Pollen Concentrations for Payerne (PPY) for all available species (the classifier for Poleno is not yet functional and produces non-sense labels).
 
@@ -118,8 +125,8 @@ data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>%
   as_tibble() %>% 
   select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
   mutate(timestamp = dmy_hm(timestamp)) %>% 
-  filter(timestamp > ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
-         timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
+  filter(timestamp > ymd_hms("2020-03-01 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
+         timestamp <= ymd_hms("2020-05-08 00:00:00")) %>% 
   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
 
 # file_hirst_3h <- list.files(path_data, pattern = "dwh_3h.csv")
@@ -136,7 +143,7 @@ data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>%
 
 ## Imputation / Missing
 
-```{r}
+```{r eval = TRUE}
 
 # Hour 1 represents the duration 00:00:01 - 01:00:00, and same for all hours up to 24
 data_poleno_hourly <- map(data_poleno,  ~.x %>% 
@@ -164,46 +171,78 @@ data_poleno_hourly %>%
 
 ```
 
-```{r}
+```{r eval = TRUE}
 
-data_hirst_raw %>% 
-  arrange(timestamp) %>% 
-  as.data.frame() %>% 
-  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Hirst Trap from DWH")
+data_hirst_raw %>%
+  arrange(timestamp) %>%
+  as.data.frame() %>%
+  Amelia::missmap(
+    y.labels = "",
+    y.at = 1,
+    col = swatch()[c(4, 2)],
+    main = "Missingness Map for Hirst Trap from DWH"
+  )
 
-data_hirst <- data_hirst_raw %>% 
-  mutate(date = date(timestamp),
-         hour = hour(timestamp),
-         trap = "hirst",
-         total = rowSums(select(., -timestamp))) %>%
+data_hirst_prep <- data_hirst_raw %>%
+  mutate(
+    date = date(timestamp),
+    hour = hour(timestamp),
+    trap = "hirst",
+    total = rowSums(select(.,-timestamp))
+  ) %>%
+  rename(
+    alnus = kaalnuh0,
+    corylus = kacoryh0,
+    taxus = kataxuh0,
+    ulmus = kaulmuh0,
+    cupressus = kacuprh0,
+    betula = kabetuh0,
+    populus = kapopuh0,
+    poaceae = khpoach0,
+    fraxinus = kafraxh0,
+    platanus = kaplath0,
+    quercus = kaquerh0,
+    fagus = kafaguh0,
+    pinaceae = kapinuh0, # Pinus is probably a sub-selecion of pinaceae only (check with Payerne)
+    carpinus = kacarph0
+  ) %>%
+  {if (species != "total") mutate(., total = !!sym(species)) else .} %>% 
   select(timestamp, date, hour, trap, total)
 
-missing_hirst <- data_hirst %>% filter(is.na(total)) %>% pull(timestamp) # The NAs are actual NAs here, during timeslots when the pollen rubber bands were exchanged.
+
+
+missing_hirst <-
+  data_hirst_prep %>% filter(is.na(total)) %>% pull(timestamp) # The NAs are actual NAs here, during timeslots when the pollen rubber bands were exchanged.
 
 ```
 
-For the hourly values we rescale the measurements to a range from 0 to 100 fir hirst and poleno. The daily values and then based on those hourly averages. For the 3, 6 and 12 hour averages we will scale the resulting pollen counts for the poleno device to a scale from 0 to 100 as well.
+For the hourly values we rescale the measurements to a range from 0 to 100 for hirst and poleno. The daily values and then based on those hourly averages. For the 3, 6 and 12 hour averages we will scale the resulting pollen counts for the poleno device to a scale from 0 to 100 as well.
 
-```{r }
+Right now we don't have the official factor to convert the pollen counts into concentrations for Poleno. Probably by chance, the counts are already very similar to the pollen per m^3 measured by hirst. I first did this exercise with scaling the time series from each trap and for each temporal aggregation to a scale of 0 to 100. After discussion with the MDS team I tried to apply a simple scaling factor to poleno, so that all time series have the same median. Depending on the research question it might be less impactful to scale the median or to the same min-max. In any case, the concentrations are already very close to Hirst-concentrations. It makes therefore little sense to introduce additional uncertainty by applying some sort of scaling to the data. For now we work with unscaled data.
+```{r eval = TRUE}
 
-data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
-data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
-data_hirst_scaled <- scales::rescale(data_hirst$total, c(0, 100))
-data_hirst <- data_hirst %>% 
-  mutate(total = data_hirst_scaled)
+# data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
+# data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
+# data_hirst_scaled <- scales::rescale(data_hirst_prep$total, c(0, 100))
+# data_hirst <- data_hirst_prep %>% 
+#   mutate(total = data_hirst_scaled)
+
+data_hirst <- data_hirst_prep
 
 data_hourly_comb_raw <- data_poleno_hourly %>% 
   bind_rows %>% 
   bind_rows(data_hirst) 
 ```
 
-```{r}
+```{r eval = TRUE}
 # Calibration was carried out on the Poleno traps during specific time slots (see: https://docs.google.com/document/d/1Eyy7G7D_f_FkovU7Ui_f3e8nbrHRF3GXKJXkU-_JPYQ/edit#) (in UTC?)
 # Those times have to be filtered for at least that specific trap. But, as we will compare traps with each other, it's safest to remove those times from all traps. As we are comparing with hourl averages from Hirst we should probably remove the full hours during which calibration was carried out. Our time series expands from the 15.2.2020 until the 3.5.2020
 
 # Für die Kalibration wird ein «Atomizer» (https://swisens.ch/products/atomizer/) auf den Einlass gesteckt welcher nur die zu kalibrierenden Pollen ins Gerät befördert. Also eine Art Laborbedingung im Feld. Das Gerät misst während der Kalibration nichts was in der realen Welt (und bei den anderen zwei Geräten) rumfliegt.
 
 # Here we exclude missing measurements from all traps to make the hourly and daily averages comparable.
+
+
 
 data_hourly_comb <- data_hourly_comb_raw %>% 
   mutate(total = if_else(between(timestamp, ymd_h("2020-02-18 08"), ymd_h("2020-02-18 16")) |
@@ -241,34 +280,13 @@ data_hourly_comb <- data_hourly_comb_raw %>%
 
 ```
 
-
-```{r fig.height=10}
-data_hourly_comb %>% 
-  pivot_wider(names_from = trap, values_from = !!sym(species)) %>% 
-  arrange(timestamp) %>% 
-  as.data.frame() %>% 
-  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for All Traps")
-  
-
-```
-
-## Aggregation
-
-For the daily and hourly values we combine the hirst and poleno measurements. For the 3, 6 and 12hour averages we limit ourselves to the poleno measurements (not available in DWH). To create those 3, 6 and 12hour averages for poleno we will exclude the whole day where calibration was carried out (to be on the safe side). For the hourly averages we exclude the full hour during which calibration was carried out. For the daily averages we assume that enough measurements are available on each day and therefore don't exclude the full day, to have enough datapoints.
-
-```{r}
-
-data_daily_comb <- data_hourly_comb %>% 
-                    group_by(date, trap) %>% 
-                    summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
-                    mutate(hour = "23:59",
-                           timestamp = date) %>% 
-                    ungroup()
+For any calibration event the full hour will be excluded from the measurement. I also did the whole analysis with excluding the full day, as apparently the calibration can distort the measurements for multiple hours. In the end I found that the distortion is not large and only the full hour has to be excluded. It makes sense to exclude the least amount of data, to be able to calculate meaningful statistics and create nice time-series plots. For the 3, 6 and 12 hour averages I will fall back to full-day exclusion, as it would be too cumbersome to define cases with (in-) sufficient measurements in any specific timestep.
 
 
-```
 
-```{r}
+```{r eval = TRUE}
+
+
 calib_events <- c(
   "2020-02-18",
   "2020-02-20",
@@ -291,8 +309,47 @@ calib_events <- c(
   "2020-04-21",
   "2020-04-23",
   "2020-03-16"
-) %>% 
+) %>%
   ymd()
+
+
+## This excludes the full day where calibration events happened. The calib events can distort the measurements even hours after the actual calibration. If one does this a lot of data is excluded from the analysis, but it is the most robust procedure and the same approach was chosen for 3, 6, 12  hour averages (not to do the exclusion of calib events multiple times for different aggregations)
+# hourly_calib <- tibble(date = rep(calib_events, each = 24), hour = rep(seq(1, 24, 1), times = length(calib_events))) %>%
+#   mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
+#          total = NA_real_)
+# 
+# data_hourly_comb <- data_hourly_comb %>%
+#   mutate(total = if_else(timestamp %in% hourly_calib$timestamp, NA_real_, total))
+```
+ 
+
+## Aggregation
+
+For the daily and hourly values we combine the hirst and poleno measurements. For the 3, 6 and 12hour averages we limit ourselves to the poleno measurements (not available in DWH). To create those 3, 6 and 12hour averages for poleno we will exclude the whole day where calibration was carried out (to be on the safe side). For the hourly averages we exclude the full hour during which calibration was carried out. For the daily averages we assume that enough measurements are available on each day and therefore don't exclude the full day, to have enough datapoints.
+
+```{r eval = TRUE}
+
+data_daily_comb <- data_hourly_comb %>% 
+  mutate(date = if_else(hour == 0, date, date + days(1))) %>%                   
+  group_by(date, trap) %>% 
+  summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+  mutate(hour = "00:00",
+         timestamp = date) %>% 
+  ungroup()
+
+
+# # There is enough data to justify calculating the mean for each day and removing NAs.
+# data_hourly_comb %>% 
+#   filter(!is.na(total)) %>% 
+#                     group_by(date, trap) %>% 
+#                     summarise(n()) %>% 
+#                     mutate(hour = "23:59",
+#                            timestamp = date) %>% 
+#                     ungroup()
+
+```
+
+```{r eval = TRUE}
 
 data_poleno_red <- map(data_poleno, ~.x %>% 
   filter(!(date %in% calib_events)))
@@ -352,10 +409,10 @@ data_hours12_pol <- map(data_poleno_red, ~.x %>%
 
 
 Let's see whether padding is necessary or whether we have values for all timestamps.
-We would expect to have a total of `r data_poleno_red %>% bind_rows %>% pull(date) %>% unique %>% length` 56 days with Poleno measurements that are not affected by calibration.
+We would expect to have a total of 56 days with Poleno measurements that are not affected by calibration.
 Hence we want to see the respective number of measurements for the various averages.
 
-```{r}
+```{r eval = TRUE}
 # measurement_counts <- (data_poleno_red %>% bind_rows %>% pull(date) %>% unique %>% length) * c(2, 4, 8)
 # 
 # data_hours3_pol %>% group_by(trap) %>% summarise(n = n())
@@ -373,8 +430,7 @@ fill_timeseries <- function(x){
       left_join(x[[j]]) %>% 
       mutate(date = date(timestamp),
              hour = hour(timestamp),
-             trap = paste0("poleno", 2 + j),
-             total = if_else(is.na(total), 0L, total))
+             trap = paste0("poleno", 2 + j))
   }
   list_timeseries
 }
@@ -383,17 +439,55 @@ data_hours3_pol <- data_hours3_pol %>% fill_timeseries()
 data_hours6_pol <- data_hours6_pol %>% fill_timeseries()
 data_hours12_pol <- data_hours12_pol %>% fill_timeseries()
 
-data_hours3_comb <- data_hours3_pol %>% 
-  bind_rows() %>% 
-  mutate(total = scales::rescale(.$total, c(0, 100)))
-data_hours6_comb <- data_hours6_pol %>% 
-  bind_rows() %>% 
-  mutate(total = scales::rescale(.$total, c(0, 100)))
-data_hours12_comb <- data_hours12_pol %>% 
-  bind_rows() %>% 
-  mutate(total = scales::rescale(.$total, c(0, 100)))
+
+# Then in a second step we need to add the calibration events back, otherwise the plots won't display the missing data approriately
+
+hours3_calib <- tibble(date = rep(calib_events, each = 8), hour = rep(seq(3, 24, 3), times = length(calib_events))) %>% 
+  mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
+         total = NA_real_)
+hours6_calib <- tibble(date = rep(calib_events, each = 4), hour = rep(seq(6, 24, 6), times = length(calib_events))) %>% 
+  mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
+         total = NA_real_)
+hours12_calib <- tibble(date = rep(calib_events, each = 2), hour = rep(seq(12, 24, 12), times = length(calib_events))) %>% 
+  mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
+         total = NA_real_)
+
+data_hours3_pol <- map2(data_hours3_pol, c(2, 4, 5), ~.x %>% 
+      bind_rows(hours3_calib %>% mutate(trap = paste0("poleno", .y))))
+data_hours6_pol <- map2(data_hours6_pol, c(2, 4, 5), ~.x %>% 
+      bind_rows(hours6_calib %>% mutate(trap = paste0("poleno", .y))))
+data_hours12_pol <- map2(data_hours12_pol, c(2, 4, 5), ~.x %>% 
+      bind_rows(hours12_calib %>% mutate(trap = paste0("poleno", .y))))
+
+# data_hours3_comb <- map(data_hours3_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
+#   bind_rows() 
+# data_hours6_comb <- map(data_hours6_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
+#   bind_rows() 
+# data_hours12_comb <- map(data_hours12_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
+#   bind_rows()
+
+data_hours3_comb <- data_hours3_pol %>% bind_rows()
+data_hours6_comb <- data_hours6_pol %>% bind_rows()
+data_hours12_comb <- data_hours12_pol  %>% bind_rows()
+```
+
+Caching is currently not supported, hence I stored all necessary files locally and load them here.
+
+```{r}
+
+# save(list = c("data_daily_comb", "data_hours12_comb", "data_hours6_comb", "data_hours3_comb", "data_hourly_comb"), file = "data_aggregated.Rdata")
+# load("data_aggregated.Rdata")
+
+```
 
 
+```{r}
+data_hourly_comb %>%
+  arrange(timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = total) %>% 
+  select(all_of(traps)) %>% 
+  as.data.frame() %>% 
+  Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for All Traps", )
 ```
 
 
@@ -405,20 +499,18 @@ Note: It does not matter whether we use the prepared or raw data for this, the o
 
 ```{r results="asis"}
 
-data_aggs_comb <- list(data_hourly_comb, data_daily_comb)
+data_aggs_comb <- list(data_hourly_comb, data_hours3_comb, data_hours6_comb, data_hours12_comb, data_daily_comb)
 number_of_measurements_comb <- map(data_aggs_comb, ~.x %>% 
   bind_rows %>%   
-  group_by(trap, date, hour) %>% 
-  summarise_at(vars(total), ~mean(., na.rm = TRUE)) %>% 
+  filter(trap %in% traps) %>% 
   replace(is.na(.), 0) %>% 
-  # mutate_at(vars(all_of(species_selection)), ~if_else((. >= 10), ., 0)) %>% 
-  mutate_at(vars(total), ~(as.integer(as.integer(.) != 0))) %>% 
+  mutate(total = total != 0) %>% 
   ungroup %>% 
   group_by(date, hour) %>%
   summarise_at(vars(total), ~sum(., na.rm = TRUE)) %>% 
   ungroup)
 
-timesteps_comb <- map(data_aggs_comb, ~ (.x %>% nrow()) / length(traps))
+timesteps_comb <- map(data_aggs_comb, ~ (.x %>% nrow()) / length(unique(.x$trap)))
 
 number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_rows(.x %>% 
     summarise_at(vars(total), ~sum(. == 4)),  
@@ -434,7 +526,11 @@ number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_ro
   mutate_at(vars(total), ~ scales::percent(. / !!.y, accuracy = 1))) %>% 
   bind_cols %>% 
   mutate(Comment = c("All traps measured", "Three traps measured", "Two traps measured", "One trap measured", "None measured")) %>%
-  rename("Hourly-Values" = total, "Daily-Values" = total1)
+  rename("Hourly-Values" = total,
+         "3Hour-Values" = total1,
+         "6Hour-Values" = total2,
+         "12Hour-Values" = total3,
+         "Daily-Values" = total4)
 
 number_traps_comb %>% 
   bind_rows() %>% 
@@ -446,52 +542,64 @@ number_traps_comb %>%
 # save_kable(table_traps, file = "table_traps.png")
 # webshot::install_phantomjs()
 
- 
-
 ```
+
+### Number of Measurements per Hour
+
+```{r eval = TRUE}
+len_traps <- 4 - length(traps[traps != "hirst"])
+set_swatch((swatch() %>% as.character)[-2:(-1-len_traps)])
+
+
+if (!exists("data_raw_poleno")){
+    load("data_poleno.Rdata")
+
+names <- names(data_raw_poleno[[1]])
+names[3] <- "timestamp1"
+names[12] <- "timestamp2"
+names[1] <- "id1"
+names[10] <- "id2"
+names[16] <- "contextVersionId2"
+
+data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>% 
+  setNames(names) %>% 
+  select(classLabel, timestamp) %>% 
+  mutate(timestamp = as_datetime(timestamp),
+         classLabel = as_factor(classLabel),
+         date = date(timestamp),
+         hour = hour(timestamp) + 1,
+         trap = paste0("poleno", .y)) %>% 
+  filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+         timestamp <= ymd_hms("2020-05-08 00:00:00")))
+
+}
+
+data_poleno %>% 
+  bind_rows() %>% 
+  mutate(timestamp = ymd_hm(paste0(date, sprintf("%02d", hour), ":00"))) %>% 
+  group_by(timestamp, trap) %>% 
+  summarise(n = n()) %>% 
+  ungroup %>% 
+  ggplot(aes(x = n, col = trap)) +
+  stat_ecdf(geom = "step") +
+  labs(title = "Hourly Pollen Count - Averaged per Day", y = "Pollen Count", x = "") +
+  coord_cartesian(xlim = c(0, 3000))
+
+ggthemr("fresh")
+  
+```
+
 
 The Poleno-traps allow to investigate different time-averages very easily. For the Hirst traps we only get 1hour, 3hour and daily averages from the DWH. The 3hour avg were excluded from this analysis because the observations don't appear to be iid (they are calcuated every hour) and the hirst traps were already compared ingreat detail in the hirstcomparison vignette. In the following we investigate the three poleno traps.
 
-```{r}
-data_hourly_comb <- data_hourly_comb_raw %>% 
-  mutate(total = if_else(between(timestamp, ymd_h("2020-02-18 08"), ymd_h("2020-02-18 16")) |
-                        between(timestamp, ymd_h("2020-02-20 14"), ymd_h("2020-02-20 19")) |
-                        between(timestamp, ymd_h("2020-02-21 08"), ymd_h("2020-02-21 16")) |
-                        between(timestamp, ymd_h("2020-02-25 10"), ymd_h("2020-02-25 16")) |
-                        between(timestamp, ymd_h("2020-03-04 13"), ymd_h("2020-03-04 16")) |
-                        between(timestamp, ymd_h("2020-03-11 13"), ymd_h("2020-03-11 16")) |
-                        between(timestamp, ymd_h("2020-03-17 09"), ymd_h("2020-03-17 12")) |
-                        between(timestamp, ymd_h("2020-03-18 13"), ymd_h("2020-03-18 17")) |
-                        between(timestamp, ymd_h("2020-03-19 13"), ymd_h("2020-03-19 17")) |
-                        between(timestamp, ymd_h("2020-03-20 13"), ymd_h("2020-03-20 16")) |
-                        between(timestamp, ymd_h("2020-03-27 10"), ymd_h("2020-03-27 12")) |
-                        between(timestamp, ymd_h("2020-03-30 07"), ymd_h("2020-03-30 10")) |
-                        between(timestamp, ymd_h("2020-04-02 14"), ymd_h("2020-04-02 16")) |
-                        between(timestamp, ymd_h("2020-04-06 11"), ymd_h("2020-04-06 17")) | # Extended by two hours until 17pm to cover the tube cleaning
-                        between(timestamp, ymd_h("2020-04-07 12"), ymd_h("2020-04-07 15")) |
-                        between(timestamp, ymd_h("2020-04-13 13"), ymd_h("2020-04-13 16")) |
-                        between(timestamp, ymd_h("2020-04-17 07"), ymd_h("2020-04-17 10")) |
-                        between(timestamp, ymd_h("2020-04-21 06"), ymd_h("2020-04-21 09")) |
-                        between(timestamp, ymd_h("2020-04-21 14"), ymd_h("2020-04-21 17")) |
-                        between(timestamp, ymd_h("2020-04-23 11"), ymd_h("2020-04-23 14")) | # Those were all calibration events
-                        between(timestamp, ymd_h("2020-03-16 08"), ymd_h("2020-03-16 10")) | # This is a Tube Cleaning Event outside calibration
-                        between(timestamp, ymd_h("2020-03-23 08"), ymd_h("2020-03-23 10")) | # During these time the Hirst trap had NAs, 
-                        timestamp %in% missing_hirst, # probably because the silicon band was being exchanged.
-                        0, total)) %>% 
-  group_by(timestamp) %>% 
-  mutate_at(vars(total), function(x){
-      if(all(x == 0))
-        return(NA) # This will set all measurements to NA if no trap measured any pollen. With Poleno there is always a measurement during the blooming season. That means that all NAs were introduced only because of the calibration events filtered out above.
-      else
-        return(x)
-  }) %>% 
-  ungroup()
-```
-
-
 # Visualization
 
-```{r fig.height=10}
+```{r fig.height=8}
+
+len_traps <- 4 - length(traps)
+if (len_traps != 0){
+  set_swatch((swatch() %>% as.character)[-2:(-1-len_traps)])
+}
 
 if (resolution == "daily"){
   data_anova <- data_daily_comb
@@ -502,16 +610,19 @@ if (resolution == "daily"){
 } else if (resolution == "3hour"){
   data_anova <- data_hours3_comb
 } else if (resolution == "hourly"){
-  data_anova <-data_hourly_comb
+  data_anova <- data_hourly_comb
 }
 
 data_anova %>%
-  ggplot(aes(x = timestamp, y = !!sym(species), col = trap)) +
+  filter(trap %in% traps) %>% 
+  ggplot(aes(x = timestamp, y = total, col = trap)) +
   geom_line() +
-  ggtitle("Hourly Total Pollen Counts") +
+  ggtitle(paste(tools::toTitleCase(resolution), tools::toTitleCase(species), "Pollen Counts")) +
   labs(x = "Date")
 
-plot_comb(resolution = resolution, traps, rm_zeros = TRUE)
+plot_comb(resolution = resolution, traps, rm_zeros = FALSE)
+ggthemr("fresh")
+
 
 ```
 
@@ -576,12 +687,11 @@ A good summary of the methods and their shortcomings can be found here: https://
 Generally the traps show a high level of correlation / association (well above 0.5). It looks like small concentrations lead to the largest discrepancies between the traps.
 
 ```{r}
-
 methods <- c("pearson", "spearman", "kendall")
 
 data_corr <- data_transformed %>% # For the robust methods (spearman, kendall) it doesn't matter whether the transformed data is used or the original
-  select(!!sym(species), trap, timestamp) %>% 
-  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  select(total, trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = total, timestamp) %>% 
   setNames(c("timestamp", sort(traps)))
 
 corr_matrix <- map(methods, ~corr.test(
@@ -596,10 +706,9 @@ corr_matrix <- map(methods, ~corr.test(
 
 # dummy <- map(corr_matrix, ~.x %>% print(short = FALSE))
 
-
 ```
 
-```{r fig.height=10, fig.width = 14}
+```{r fig.height=8}
 
 traps_pairs <- combn(traps, 2)
 gg_corr <- list()
@@ -619,15 +728,15 @@ for (i in 1:ncol(traps_pairs)){
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1, method = "loess") +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = 3.6, y = 9)) +
-  coord_cartesian(ylim = c(0, 5), xlim = c(0, 5))
+  geom_label(label = c(paste(ci[i], "\n", ci[ncol(traps_pairs) + i], "\n", ci[ncol(traps_pairs) * 2 + i])), aes(x = max(data_corr[traps_pairs[1, i]], na.rm = TRUE) - 1.5, y = 1)) +
+  coord_cartesian(ylim = c(0, max(data_corr[traps_pairs[1, i]], na.rm = TRUE) + 2), xlim = c(0, max(data_corr[traps_pairs[1, i]], na.rm = TRUE) + 2))
   
 }
 
-title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
+title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen as measured by the ", length(traps), " traps"))
 
 ggarrange(plotlist = gg_corr) %>%
-  annotate_figure(top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+  annotate_figure(top = title, bottom = text_grob("Pairwise correlation of traps; grey line shows the Loess smother; the red line shows a theoretical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the r-values (adjusted for multiple comparison) \n as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 12))
 ```
 
 
@@ -636,23 +745,23 @@ ggarrange(plotlist = gg_corr) %>%
 
 The well established AB-method for clinical trials can be used here as well to compare the means and differences between traps. Again we see that trap 8 generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence the traps can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
 
-```{r fig.height=9}
+```{r fig.height=8}
 
 gg_ab <- list()
 
 data_altman <- data_transformed %>% 
-  select(!!sym(species), trap, timestamp) %>% 
-    pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
-    setNames(c("timestamp", sort(traps)))
+  select(total, trap, timestamp) %>% 
+    pivot_wider(names_from = trap, values_from = total) 
 
 for (i in 1:ncol(traps_pairs)) {
   data_altman <- data_altman %>%
     mutate(
       !!paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")") := if_else(
-        !is.na(!!sym(traps_pairs[1, i])) | !is.na(!!sym(traps_pairs[2, i])),
+        !is.na(!!sym(traps_pairs[1, i])) & !is.na(!!sym(traps_pairs[2, i])),
         rowSums(.[c(grep(paste0("^", traps_pairs[1, i], "$"), names(.)), grep(paste0("^", traps_pairs[2, i], "$"), names(.)))], na.rm = TRUE) / 2,
-        NA_real_
-      ),!!paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")") := !!sym(traps_pairs[1, i]) -!!sym(traps_pairs[2, i])
+        NA_real_),
+      !!paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")") := if_else(
+        !is.na(!!sym(traps_pairs[1, i])) & !is.na(!!sym(traps_pairs[2, i])), !!sym(traps_pairs[1, i]) -!!sym(traps_pairs[2, i]), NA_real_)
     )
 }
 
@@ -663,20 +772,23 @@ sd_diff <- data_altman %>%
   pull(sd)
 
 for (i in 1:ncol(traps_pairs)) {
+  
+  x_altman <- paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")")
+  
   gg_ab[[i]] <- data_altman %>% 
-    ggplot(aes(x = !!sym(paste0("mean(", paste(traps_pairs[1:2, i], collapse = ", "), ")")), y = !!sym(paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")")))) +
+    ggplot(aes(x = !!sym(x_altman), y = !!sym(paste0("diff(", paste(traps_pairs[1:2, i], collapse = " - "), ")")))) +
     geom_point(alpha = 0.5) +
-    coord_cartesian(xlim = c(0, 5), ylim = c(-sd_diff[i] * 5, sd_diff[i] * 5)) +  
+    coord_cartesian(xlim = c(min(data_altman %>% pull(!!sym(x_altman))), max(data_altman %>% pull(!!sym(x_altman)))), ylim = c(-sd_diff[i] * 5, sd_diff[i] * 5)) +  
     geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
-    geom_abline(slope = 0, intercept = sd_diff[i] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
-    geom_abline(slope = 0, intercept = sd_diff[i] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
+    geom_abline(slope = 0, intercept = sd_diff[i] * 1.96, col = swatch()[4], alpha = 0.8, linetype = 3) +
+    geom_abline(slope = 0, intercept = sd_diff[i] * (-1.96), col = swatch()[4], alpha = 0.8, linetype = 3) +
     geom_smooth(formula = "y ~ x", alpha = 0.1, method = "loess") 
 }
   
-title <- "Altman-Bland Plots for all Traps"
+title <- tools::toTitleCase(paste0("Bland-Altman Plots for ", resolution, " average concentrations of ", species, " pollen as measured by the ", length(traps), " traps"))
 
 ggarrange(plotlist = gg_ab) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison of means and differences between traps; grey line shows the Loess smother; \n the red line shows a theoretical perfect agreement between two traps of zero. \n The dashed red line represents a band with width ±1.96 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
   
 
 ```
@@ -684,23 +796,37 @@ ggarrange(plotlist = gg_ab) %>%
 We observe that Poleno 2 is generally lower than the other traps, and Hirst is significantly higher than the Poleno traps.
 I will have a closer look at the differences between poleno 2 and poleno 5. The data shows that between March 5 and March 16 the largest differences occur. 
 
-```{r}
+```{r fig.width = 11}
 
-gg_hist <- data_altman %>% 
-  filter(`diff(poleno2 - poleno5)` < -1) %>% 
+xlim = c(min(data_altman$timestamp), max(data_altman$timestamp))
+
+gg_hist24 <- data_altman %>% 
+  filter(abs(`diff(poleno2 - poleno4)`) > sd_diff[1]) %>% 
+  mutate(col = if_else(`diff(poleno2 - poleno4)` < 0, "neg", "pos")) %>% 
   ggplot()+
-  geom_histogram(aes(x = timestamp), bins = 50) 
+  geom_histogram(aes(x = timestamp, fill = col), bins = 50, position = "stack") +
+  ggtitle("Main Differences Between Poleno 2 and Poleno 4") +
+  coord_cartesian(xlim = xlim)
 
-gg_hist %>%  
-  annotate_figure(bottom = text_grob("The largest differences occur during the first two weeks of March. According to the measurements at MCH \n  the species blooming during that period are Cupressus, Eibe, Erle, Esche, Pappel, Weide, Ulme, Hasel", color = swatch()[1], face = "italic", size = 10), top = "Main Differences Between Poleno 2 and Poleno 5")
-
-```
-
-```{r}
- data_altman %>% 
-  filter(abs(`diff(poleno2 - poleno5)`) > 1) %>% 
+gg_hist25 <- data_altman %>% 
+  filter(abs(`diff(poleno2 - poleno5)`) > sd_diff[1]) %>% 
+  mutate(col = if_else(`diff(poleno2 - poleno5)` < 0, "neg", "pos")) %>% 
   ggplot()+
-  geom_histogram(aes(x = timestamp), bins = 50) 
+  geom_histogram(aes(x = timestamp, fill = col), bins = 50, position = "stack") +
+  ggtitle("Main Differences Between Poleno 2 and Poleno 5") +
+  coord_cartesian(xlim = xlim)
+
+gg_hist45 <- data_altman %>% 
+  filter(abs(`diff(poleno4 - poleno5)`) > sd_diff[1]) %>% 
+  mutate(col = if_else(`diff(poleno4 - poleno5)` < 0, "neg", "pos")) %>% 
+  ggplot()+
+  geom_histogram(aes(x = timestamp, fill = col), bins = 50, position = "stack") +
+  ggtitle("Main Differences Between Poleno 4 and Poleno 5") +
+  coord_cartesian(xlim = xlim)
+
+ggarrange(gg_hist24, gg_hist25, gg_hist45) %>%  
+  annotate_figure(bottom = text_grob("The largest differences occur during the first two weeks of March. According to the measurements at MCH \n  the species blooming during that period are Cupressus, Eibe, Erle, Esche, Pappel, Weide, Ulme, Hasel", color = swatch()[1], face = "italic", size = 10))
+
 ```
 
 
@@ -726,7 +852,7 @@ F = variation between sample means / variation within the samples. I If the P-Va
 We use the settings that the coefficients for the three traps add to zero.
 
 ```{r}
-fit_anova <- aov(as.formula(paste(species, "~ trap")), data = data_transformed, contrasts = c("contr.sum", "contr.poly"))
+fit_anova <- aov(total ~ trap, data = data_transformed, contrasts = c("contr.sum", "contr.poly"))
 summary(fit_anova)
 
 ```
@@ -744,7 +870,7 @@ is correct. By default, a standard normal distribution is the theoretical “ref
 They are definitely not and we have to do some adjustments. So for the following plot we logarithmic the data to deal with the right-skewedness. The best results were achieved by first logarithmic the data and then taking the square root.
 
 ```{r}
-fit_anova_raw <- aov(as.formula(paste(species, "~ trap")), data = data_anova, contrasts = c("contr.sum", "contr.poly"))
+fit_anova_raw <- aov(total ~ trap, data = data_anova, contrasts = c("contr.sum", "contr.poly"))
 
 gg_res1 <- tibble(residuals = residuals(fit_anova_raw, type = "pearson")) %>% 
   ggplot(aes(sample = residuals)) +
@@ -841,9 +967,10 @@ Assumptions:
 
 https://en.Wikipedia.org/wiki/Tukey%27s_range_test
 
-```{r}
+```{r }
 hsd <- TukeyHSD(fit_anova)
-plot(hsd)
+rownames(hsd$trap) <- str_replace_all(rownames(hsd$trap), pattern = "poleno", replacement = "p")
+plot(hsd, las = 1)
 ```
 
 ### Random Effects Model
@@ -852,7 +979,7 @@ So far we have been looking at three traps in isolation. But they are part of a 
 We want to compare the random effect variance for trap with the Residual variance here.
 
 ```{r}
-fit_lmer <- lmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
+fit_lmer <- lmer(total ~ (1 | trap), data = data_transformed)
 # isSingular(fit_lmer) # This has to be checked
 summary(fit_lmer)
 confint(fit_lmer, oldNames = FALSE)
@@ -913,18 +1040,18 @@ The Wilcoxon signed-rank test assumes that the data are distributed symmetricall
 
 ```{r}
 data_transformed %>% 
-  ggplot(aes(x = !!sym(species))) +
+  ggplot(aes(x = total)) +
   geom_histogram(alpha = 0.7, bins = 50) +
   # geom_freqpoly(col = swatch()[3], bins = 30) +
   # geom_density(col = swatch()[5]) +
-  geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = swatch()[4]) +
+  geom_vline(xintercept = median(data_transformed %>% pull(total), na.rm = TRUE), col = swatch()[4]) +
   ggtitle("Histogram of the Transformed Data With the Median (Red Line)")
 
 ```
 
 
 ```{r}
-kruskal.test(as.formula(paste(species, "~ trap")), data = data_transformed)
+kruskal.test(total ~ trap, data = data_transformed)
 ```
 
 ### Dunn's test and the Conover-Iman test
@@ -947,11 +1074,11 @@ to that of the Wilcoxon-Mann-Whitney rank-sum test. Like the ranksum test, if th
 
 ```{r}
 
-dunn.test::dunn.test(data_transformed %>% pull(!!sym(species)),
+dunn.test::dunn.test(data_transformed %>% pull(total),
                      data_transformed$trap,
                      method = "holm") # Try different FEWR /FDR adjustments here
 
-conover.test::conover.test(data_transformed %>% pull(!!sym(species)),
+conover.test::conover.test(data_transformed %>% pull(total),
                      data_transformed$trap,
                      method = "holm")
 
@@ -961,8 +1088,8 @@ For Donover the ECDF curves are not allow to cross each other. This is actually 
 
 ```{r}
 data_transformed %>% 
-  select(!!sym(species), trap) %>% 
-  ggplot(aes(x = !!sym(species), col = trap)) +
+  select(total, trap) %>% 
+  ggplot(aes(x = total, col = trap)) +
   stat_ecdf(geom = "line", pad = FALSE) +
   ggtitle("Empirical Cumulative Distribution Function for All Traps")
 
@@ -972,7 +1099,7 @@ data_transformed %>%
 ```{r}
 # # This is incorrect, see: https://stats.stackexchange.com/questions/71996/differences-between-dwass-steel-critchlow-fligner-and-mann-whitney-u-test-for-a
 # 
-# pairwise.wilcox.test(data_anova %>% pull(!!sym(species)), 
+# pairwise.wilcox.test(data_anova %>% pull(total), 
 #                      data_anova$trap,
 #                      paired = FALSE,
 #                      p.adjust.method = "fdr",
@@ -986,7 +1113,7 @@ When using classic estimation methods, even one such outlier might inflate the b
 Currently, there are two different methods available for fitting models. They only differ in how the consistency factors for the Design Adaptive Scale estimates are computed. Available fitting methods for theta and sigma. DAStau (default): For this method, the consistency factors are computed using numerical quadrature. This is slower but yields more accurate results. This is the direct analogue to the DAS-estimate in robust linear regression.
 
 ```{r eval = FALSE}
-fit_rlmer <- rlmer(as.formula(paste(species, "~ (1 | trap)")), data = data_transformed)
+fit_rlmer <- rlmer(total ~ (1 | trap), data = data_transformed)
 summary(fit_rlmer)
 
 # # The parameters can be tuned for a more efficient fit, I leave this to the interested reader: 
@@ -1005,16 +1132,21 @@ In this first section we compare relative and absolute differences from the mean
 
 ```{r warning=FALSE}
 
-errors <- data_corr %>% 
-  mutate(exclude = rowSums(is.na(data_corr)) < length(traps), # At least one trap should have measured something otherise we are not calculating the means
-    mean = if_else(exclude,
-                   rowSums(.[2:length(traps) + 1], na.rm = TRUE) / ncol(traps_pairs), 
+traps_errors <- traps[traps != "hirst"]
+
+data_errors_raw <- data_corr %>% 
+  select(timestamp, all_of(traps_errors)) %>% 
+  mutate_at(vars(all_of(traps_errors)), ~ exp(.) - 1) %>% 
+  mutate(exclude1 = poleno2 == 0 | poleno4 == 0 | poleno5 == 0, # All traps should have measured something otherise we are not calculating the means, this returns NA if measurements was NA
+         exclude2 = is.na(poleno2) | is.na(poleno4) | is.na(poleno5),
+    mean = if_else(!exclude1 & !exclude2,
+                   rowSums(.[2:(length(traps_errors) + 1)]) / length(traps_errors), 
                    NA_real_)) %>% 
-  na.omit() %>% 
-  mutate_at(vars(all_of(traps)), ~(. - mean)) %>% 
-  pivot_longer(cols = 2:(1 + length(traps)), values_to = "error", names_to = "trap") %>% 
-  mutate(error_rel = error / mean) %>% 
-  select(-mean, -exclude)
+  na.omit() 
+errors <- data_errors_raw %>% 
+  mutate_at(vars(all_of(traps_errors)), ~(. / mean)) %>% 
+  pivot_longer(cols = 2:(1 + length(traps_errors)), values_to = "error", names_to = "trap") %>% 
+  select(-mean, -exclude1, -exclude2)
 
 sd(errors$error, na.rm = TRUE)
 
@@ -1028,14 +1160,14 @@ t_errors <- tibble(x = x, y = dt((x - m) / s, df = df) / s)
 
 gg_t_abs <- errors %>%
   ggplot(aes(x=error, y = ..density..)) +
-  geom_histogram(bins= 100) +
+  geom_histogram(binwidth = 1/30) +
   geom_density(col = swatch()[4]) +
   geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
   geom_line(data = t_errors, aes(x = x, y = y), col = swatch()[6]) +
-  coord_cartesian(xlim = c(-5, 5))
+  coord_cartesian(xlim = c(0, 2))
 
 ggarrange(gg_t_abs) %>% 
-  annotate_figure(top = "Absolute/Relative Differences from the Average Measurements of the Three Traps",
+  annotate_figure(top = "Relative Differences from the Average Measurements of the Three Traps",
                   bottom = text_grob("On top the absolute differences from the mean fitted with a density kernel estimator (red) and a Student-t distribution (black). \n At the bottom the relative differences from the mean.", color = swatch()[1], face = "italic", size = 10))
 
 ```
@@ -1047,7 +1179,7 @@ sample <- tibble(x = (x-m)/s, y = pt((x-m)/s, df = df))
 gg_cdf1 <- errors %>% 
   ggplot(aes(x = error)) +
   stat_ecdf(geom = "step", pad = FALSE) +
-  coord_cartesian(xlim = c(-2.5, 2.5)) +
+  coord_cartesian(xlim = c(0, 2.5)) +
   geom_line(data = sample, aes(x = x, y = y))
 
 ggarrange(gg_cdf1, nrow = 1) %>%
@@ -1059,8 +1191,7 @@ Graphically the QQ-Plot versus a t-distribution allows us to check whether the c
 
 ```{r}
 errors %>% 
-  mutate(error_scaled = (error)) %>%
-  ggplot(aes(sample = error_scaled)) +
+  ggplot(aes(sample = error)) +
   stat_qq(distribution = qt, dparams = as.list(df)) +
   stat_qq_line(distribution = qt, dparams = as.list(df)) +
   ggtitle("QQ-Plot to Compare Empirical Quantiles with Theoretical Ones from a t-Distribution")
@@ -1077,6 +1208,350 @@ cvm.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = 
 ad.test((errors$error[!is.na(errors$error)] - m)/s, "pt", df = df, estimated = TRUE)
 
 ```
+
+## Concentrations
+
+```{r fig.height=8}
+
+
+len_traps <- 4 - length(traps)
+if (len_traps != 0){
+  set_swatch((swatch() %>% as.character)[-2:(-1-len_traps)])
+}
+
+labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
+names(labels_y) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+names(labels_y_hist) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
+
+data_errors_comb_conc <- data_errors_raw %>% 
+  mutate(conc = case_when(
+    mean >= 0 & mean < 10 ~ "Group00_10",
+    mean >= 10 & mean < 20 ~ "Group10_20",
+    mean >= 20 & mean < 50 ~ "Group20_50",
+    mean >= 50 & mean < 100 ~ "Group50_100",
+    mean >= 100 & mean < 500 ~ "Group100_500",
+    mean >= 500 ~ "Group500"
+  )) %>% 
+  pivot_longer(poleno2:poleno5, names_to = "trap") %>% 
+  select(timestamp, trap, value, conc) %>% 
+  pivot_wider(names_from = conc, values_from = value)
+
+
+gg_conc_dens <- list()
+gg_conc_hist <- list()
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+  
+  if (j %in% names(data_errors_comb_conc)){
+    obs <- data_errors_comb_conc %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/3) %>% 
+    pull 
+    obs <- paste("# of Observations:", obs)
+  
+    gg_conc_dens[[j]] <- data_errors_comb_conc %>% 
+      filter(!is.na(!!sym(j)))  %>% 
+      ggplot() +
+      geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
+      geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]]) +
+      coord_cartesian(xlim = c(0, NA))
+  }
+}
+
+gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Comparison of", tools::toTitleCase(resolution), "Measurements of the Three Traps for all Species and Different Concentration Groups."),
+                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
+
+gg_dens_conc
+ggthemr("fresh")
+
+```
+
+For lower concentrations the deviations between the traps becomes quite large, but please be aware of the differing x-axes.
+
+```{r fig.width = 10}
+
+# I manually removed the fitted t-distributions stuff from the plot_hist_dt function for this and then put it back in afterwards.
+gg_hist_conc <- list()
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+    if (j %in% names(data_errors_comb_conc)){
+     gg_hist_conc[[j]] <- plot_hist_dt(data_errors_comb_conc %>% mutate(type = "dummy"), j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE)
+    }
+}
+
+gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+
+gg_error_conc
+
+```
+
+# Auto-Correlation
+
+In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
+I will create a dataset with 5-Minute averages to have the shortest window available as possible.
+There is a paper that showed that auto-correlation is to be expected when measuring pollen concentrations. This is important, because for many statistical methods to compare traps the assumptions would be violated. In addition to that it is interesting to see for how long a certain measurement can affect future measurements (also with regards to implementing the data into the predictive pollen-models in COSMO). For Hirst the autocorrelations were probably never an issue, as the coarse temporal resolution removed any autocorrelation in the data.
+
+```{r fig.width = 10, fig.height = 10, eval = TRUE}
+
+if (!exists("data_raw_poleno")){
+  load(file = "data_raw_poleno.Rdata")
+  
+  names <- names(data_raw_poleno[[1]])
+  names[3] <- "timestamp1"
+  names[12] <- "timestamp2"
+  names[1] <- "id1"
+  names[10] <- "id2"
+  names[16] <- "contextVersionId2"
+  
+  data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>% 
+    setNames(names) %>% 
+    select(classLabel, timestamp) %>% 
+    mutate(timestamp = as_datetime(timestamp),
+           classLabel = as_factor(classLabel),
+           date = date(timestamp),
+           hour = hour(timestamp) + 1,
+           trap = paste0("poleno", .y)) %>% 
+    filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+           timestamp <= ymd_hms("2020-05-08 00:00:00")))
+}
+
+# load(file = "data_autocorr.Rdata")
+
+if (!exists("ts_autocorr_tb")){
+  data_autocorr <- data_poleno[[2]] # Select your trap here
+  
+  start_window <- ymd_hms("2020-03-01 00:00:00")
+  ts_autocorr_tb <- tibble()
+  length_window <- 5
+  
+  while (start_window < ymd_hms("2020-05-08 00:00:00")){
+    end_window <- start_window + minutes(length_window) 
+    count_window <- data_autocorr %>% 
+      filter(between(timestamp, start_window, end_window)) %>% 
+      summarise(n = n()) %>% 
+      pull(n)
+    start_window <- end_window
+    ts_count <- tibble(end_window, count_window)
+    ts_autocorr_tb <- bind_rows(ts_autocorr_tb, ts_count)
+    print(end_window)
+  }
+}
+
+
+ts_autocorr_tb <- ts_autocorr_tb %>% 
+  mutate(count_window = log(count_window + 1)) # This is for 5-Minutes Data
+
+ts_autocorr <- as_tsibble(ts_autocorr_tb, regular = TRUE)
+
+# For now, the most interesting analysis is the autocorrelation in the time-series. We would also like to understand better if the autocorrelation is physical in nature or introduced by the measurement device. Furthermore we observed that the indexplot changes sign mid-season (in the ANOVA analysis above).
+
+# Timeseries Plot
+
+ts_autocorr_tb %>%
+  ggplot(aes(x = end_window, y = count_window)) +
+  geom_line() +
+  ggtitle("Total Pollen Counts of Poleno4 for 5-Minute Intervals") +
+  labs(x = "Date", y = "Pollen Count per 5-Minute Interval")
+
+# Index-Plot from ANOVA Residuals
+
+gg_timeline2
+
+# Lagged Scatterplot
+
+ts_autocorr_tb %>% 
+  mutate(lag1 = lag(count_window, 1),
+         lag12 = lag(count_window, 12),
+         lag144 = lag(count_window, 144),
+         lag288 = lag(count_window, 288)) %>% 
+  pivot_longer(cols = lag1:lag288, names_to = "lag", values_to = "value") %>% 
+  ggplot(aes(x = count_window, y = value)) +
+  geom_point(alpha = 0.1) +
+  # coord_cartesian(xlim = c(0, 500), ylim = c(0, 500)) +
+  labs(x = "", y = "") +
+  facet_wrap(~ lag)
+
+ts_autocorr %>% gg_lag(count_window, lags = 10)
+
+# Decomposition: As we are only looking at one year of data, decomposition into trend and seasonal effect makes little sense. This would be an interesting exercise for the future though, once we have multiple years of collected Poleno Data. Actually, there might be daily "seasonal" effects that we can filter out. Let's try :-)
+
+dcmp <- ts_autocorr %>%
+  model(STL(count_window ~ season(window = Inf)))
+dcmp_components <- components(dcmp)
+dcmp_components %>% autoplot()
+
+# ACF
+
+poleno_acf <- acf(ts_autocorr_tb$count_window, plot = FALSE, lag.max = 60)
+poleno_acf_df <- with(poleno_acf, data.frame(lag, acf)) %>% slice(-1)
+conf_level <- 0.95
+ciline <- qnorm((1 - conf_level) / 2) / sqrt(nrow(ts_autocorr_tb))
+
+ggplot(data = poleno_acf_df, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) + 
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# poleno_acf_remainder <- acf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+# poleno_acf_df_remainder <- with(poleno_acf_remainder, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% ACF(count_window) %>% autoplot()
+
+# PACF
+
+poleno_pacf <- pacf(ts_autocorr_tb$count_window, plot = FALSE, lag.max = 60)
+poleno_pacf_df <- with(poleno_pacf, data.frame(lag, acf)) %>% slice(-1)
+
+ggplot(data = poleno_pacf_df, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) + 
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+# 
+# poleno_pacf_remainder <- pacf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+# poleno_pacf_df_remainder <- with(poleno_pacf_remainder, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_pacf_df_remainder, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% PACF(count_window) %>% autoplot()
+
+```
+
+```{r fig.height=10, fig.width=10}
+
+ts_autocorr_tb <- data_hourly_comb %>% 
+  filter(trap == "poleno4") %>% 
+  select(timestamp, total) %>% 
+  mutate(total = if_else(is.na(total), 0, total),
+         total = log(total + 1)) %>% 
+  rename(end_window = timestamp, count_window = total) # This is for hourly data
+
+ts_autocorr <- as_tsibble(ts_autocorr_tb, regular = TRUE, index = end_window)
+
+# Timeseries Plot
+
+ts_autocorr_tb %>%
+  ggplot(aes(x = end_window, y = count_window)) +
+  geom_line() +
+  ggtitle("Total Pollen Counts of Poleno4 for Hourly Intervals") +
+  labs(x = "Date", y = "Pollen Count per Hourly Interval")
+
+# Index-Plot from ANOVA Residuals
+
+# gg_timeline2
+
+# Lagged Scatterplot
+
+ts_autocorr_tb %>% 
+  mutate(lag01 = lag(count_window, 1),
+         lag02 = lag(count_window, 2),
+         lag04 = lag(count_window, 4),
+         lag06 = lag(count_window, 6),
+         lag12 = lag(count_window, 12),
+         lag24 = lag(count_window, 24),
+         lag48 = lag(count_window, 48),
+         lag72 = lag(count_window, 72),
+         lag96 = lag(count_window, 96)) %>% 
+  pivot_longer(cols = lag01:lag96, names_to = "lag", values_to = "value") %>%
+  ggplot(aes(x = count_window, y = value)) +
+  geom_point(alpha = 0.2) +
+  # coord_cartesian(xlim = c(0, 500), ylim = c(0, 500)) +
+  labs(x = "", y = "") +
+  facet_wrap(~ lag)
+
+# Decomposition: As we are only looking at one year of data, decomposition into trend and seasonal effect makes little sense. This would be an interesting exercise for the future though, once we have multiple years of collected Poleno Data. Actually, there might be daily "seasonal" effects that we can filter out. Let's try :-)
+
+dcmp <- ts_autocorr %>%
+  model(STL(count_window ~ season(window = 24)))
+dcmp_components <- components(dcmp)
+dcmp_components %>% autoplot()
+
+# ACF
+
+conf_level <- 0.95
+ciline <- qnorm((1 - conf_level) / 2) / sqrt(nrow(ts_autocorr_tb))
+
+# poleno_acf <- acf(ts_autocorr_tb$count_window, plot = FALSE, lag.max = 60)
+# poleno_acf_df <- with(poleno_acf, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_acf_df, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+poleno_acf_remainder <- acf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+poleno_acf_df_remainder <- with(poleno_acf_remainder, data.frame(lag, acf)) %>% slice(-1)
+
+ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) +
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% ACF(count_window) %>% autoplot()
+
+# PACF
+
+# poleno_pacf <- pacf(ts_autocorr_tb$count_window, plot = FALSE, lag.max = 60)
+# poleno_pacf_df <- with(poleno_pacf, data.frame(lag, acf)) %>% slice(-1)
+# 
+# ggplot(data = poleno_pacf_df, mapping = aes(x = lag, y = acf)) +
+#   geom_hline(aes(yintercept = 0)) +
+#   geom_segment(mapping = aes(xend = lag, yend = 0)) +
+#   geom_hline(aes(yintercept = ciline), linetype = 2) + 
+#   geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+poleno_pacf_remainder <- pacf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+poleno_pacf_df_remainder <- with(poleno_pacf_remainder, data.frame(lag, acf)) %>% slice(-1)
+
+ggplot(data = poleno_pacf_df_remainder, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) +
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+# ts_autocorr %>% PACF(count_window) %>% autoplot()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
