@@ -33,6 +33,9 @@ Imports:
     dunn.test,
     conover.test,
     tsibble,
-    feasts
+    feasts,
+    AeRobiology,
+    padr,
+    goftest
 VignetteBuilder: knitr
 RoxygenNote: 7.1.0

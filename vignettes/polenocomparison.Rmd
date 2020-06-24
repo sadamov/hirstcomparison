@@ -5,10 +5,10 @@ author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 always_allow_html: TRUE
 output:
+  word_document: default
+  pdf_document: default
   html_document:
     df_print: paged
-  pdf_document: default
-  word_document: default
 ---
 
 # Setup
@@ -28,8 +28,8 @@ if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
 
 ```{r include=FALSE}
 knitr::opts_chunk$set(echo = FALSE,
-                      error = FALSE, 
-                      warning = FALSE, 
+                      error = FALSE,
+                      warning = FALSE,
                       message = FALSE,
                       fig.retina =2.5,
                       fig.width = 10,
@@ -52,6 +52,7 @@ library(kableExtra)
 library(tsibble)
 library(feasts)
 library(padr)
+library(ggthemr)
 
 # library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
 
@@ -98,7 +99,7 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
 if (species != "total"){
   data_poleno <- map(data_poleno, ~.x %>% 
                              filter(prediction_label == species
-                                    , prediction_max_value >= 0.7 # This is a simple approximation as Payerne (Gian) was still working on the classifier optimization.
+                                    , prediction_max_value >= 0.1 # This is a simple approximation as Payerne (Gian) was still working on the classifier optimization.
   ))
 }
 
@@ -536,7 +537,7 @@ number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_ro
 number_traps_comb %>% 
   bind_rows() %>% 
   kable() %>% 
-  kable_styling("striped", full_width = FALSE)
+  kable_styling(full_width = FALSE)
 
 # For rendering docx documents
 # NOT ALLOWED AT MCH TO EXECUTE .exe file
@@ -1295,7 +1296,7 @@ In the following we will investigate the auto-correlation of the poleno pollen m
 I will create a dataset with 5-Minute averages to have the shortest window available as possible.
 There is a paper that showed that auto-correlation is to be expected when measuring pollen concentrations. This is important, because for many statistical methods to compare traps the assumptions would be violated. In addition to that it is interesting to see for how long a certain measurement can affect future measurements (also with regards to implementing the data into the predictive pollen-models in COSMO). For Hirst the autocorrelations were probably never an issue, as the coarse temporal resolution removed any autocorrelation in the data.
 
-```{r fig.width = 10, fig.height = 10, eval = TRUE}
+```{r fig.width = 10, fig.height = 10, eval = FALSE}
 
 if (!exists("data_raw_poleno")){
   load(file = "data_raw_poleno.Rdata")
