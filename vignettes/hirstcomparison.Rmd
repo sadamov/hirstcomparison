@@ -20,7 +20,7 @@ output:
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -48,7 +48,7 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
-library(rcompanion)
+
 # library(ggthemr)
 
 # library(Amelia) # only used for one fct call to missmap()
@@ -634,6 +634,246 @@ occurence_raw %>%
 
 
 ```
+
+## Deviations of the Means
+
+```{r}
+
+maximum_raw_hours2 <- data_hours2_raw %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average_raw_hours2<- data_hours2_raw %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+sd_list_daily <- list(maximum_raw, average_raw)
+sd_list_hours2 <- list(maximum_raw_hours2, average_raw_hours2)
+
+sd_tb_daily <- map(sd_list_daily, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+  
+sd_tb_hours2 <- map(sd_list_hours2, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_tb_hours2 %>% 
+  bind_cols(sd_tb_daily) %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
+  select(-name1) %>% 
+  setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(1, border_right = TRUE) %>% 
+  column_spec(5, border_right = TRUE) %>% 
+  pack_rows(start_row = 1, end_row = 5, group_label = "Max. Value") %>% 
+  pack_rows(start_row = 6, end_row = 10, group_label = "Avg. Value") 
+
+
+
+```
+
+## Deviations of the Individual Measurements
+
+```{r}
+
+sd_2hour_ind <- data_hours2_raw %>% 
+  bind_rows %>% 
+  group_by(date, hour, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  pivot_longer(Castanea:Picea, names_to = "name", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd_ind = sd(value),
+         mean_ind = mean(value),
+         se_ind = sd_ind / n(),
+         cv_ind = sd_ind/mean_ind) %>% 
+    filter(name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
+         trap == 2,
+         date == as.Date("2013-04-02"),
+         hour == 2) %>% 
+  select(name, sd_ind:cv_ind) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_daily_ind <- data_daily_raw %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  pivot_longer(Castanea:Picea, names_to = "name", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd_ind = sd(value),
+         mean_ind = mean(value),
+         se_ind = sd_ind / n(),
+         cv_ind = sd_ind/mean_ind) %>% 
+    filter(name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
+         trap == 2,
+         date == as.Date("2013-04-02")) %>% 
+  select(name, sd_ind:cv_ind) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_2hour_ind %>% 
+  bind_cols(sd_daily_ind) %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
+  select(-name1) %>% 
+  setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(1, border_right = TRUE) %>% 
+  column_spec(5, border_right = TRUE)
+
+
+
+```
+
+
+```{r}
+
+maximum_raw_hours2 <- data_hours2%>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average_raw_hours2 <- data_hours2 %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+maximum_raw_daily <- data_daily %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average_raw_daily <- data_daily %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+sd_list_daily <- list(maximum_raw_daily, average_raw_daily)
+sd_list_hours2 <- list(maximum_raw_hours2, average_raw_hours2)
+
+sd_tb_daily <- map(sd_list_daily, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+  
+sd_tb_hours2 <- map(sd_list_hours2, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_tb_hours2 %>% 
+  bind_cols(sd_tb_daily) %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
+  select(-name1) %>% 
+  setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(1, border_right = TRUE) %>% 
+  column_spec(5, border_right = TRUE) %>% 
+  pack_rows(start_row = 1, end_row = 5, group_label = "Max. Value") %>% 
+  pack_rows(start_row = 6, end_row = 10, group_label = "Avg. Value") 
+
+
+
+```
+
 
 ```{r}
 
@@ -1903,8 +2143,8 @@ for (i in species_contr){
   
   npar_contr[[i]] <- map(data_contr_tf, ~nparcomp::nparcomp(as.formula(paste(i, "~ trap")), data = .x, conf.level = 0.95, alternative = "two.sided", type = "Tukey"))
   npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
-  # kruskal_contr[[i]] <- map(data_contr_tf, ~kruskal.test(as.formula(paste(species, "~ trap")), data = .x))
-  # kruskal_contr_effect[[i]] <- map(data_contr_tf, ~)
+  npar_contr_overall[[i]] <- map(npar_contr[[i]], ~.x[["Overall"]])
+
 }
 
 number_obs_contr <- map(data_contr_tf, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
@@ -2100,30 +2340,30 @@ two_hour_table %>%
 ```
 
 ```{r}
-two_hour_contr <- map(npar_contr_overall, ~.x %>% extract(c(1))) 
-daily_contr <- map(npar_contr_overall, ~.x %>% extract(c(5))) 
+two_hour_contr <- map(npar_contr_overall, ~.x %>% extract(c(1)))
+daily_contr <- map(npar_contr_overall, ~.x %>% extract(c(5)))
 
-two_hour_table <- two_hour_contr %>% 
-  unlist(recursive = FALSE) %>% 
-  bind_rows() %>% 
-  mutate_if(is.numeric, round, 3) %>% 
+two_hour_table <- two_hour_contr %>%
+  unlist(recursive = FALSE) %>%
+  bind_rows() %>%
+  mutate_if(is.numeric, round, 3) %>%
   mutate(Species = species_contr)
 
-daily_table <- daily_contr %>% 
-  unlist(recursive = FALSE) %>% 
-  bind_rows() %>% 
-  mutate_if(is.numeric, round, 3) %>% 
+daily_table <- daily_contr %>%
+  unlist(recursive = FALSE) %>%
+  bind_rows() %>%
+  mutate_if(is.numeric, round, 3) %>%
   mutate(Species = species_contr)
 
-two_hour_table %>% 
-  bind_cols(daily_table) %>% 
-  select(Species, Quantile, p.Value, Quantile1, p.Value1) %>% 
-  setNames(c("Species", "Quantile", "p.Value", "Quantile", "p.Value")) %>% 
-  kable(escape = FALSE, align = c("c",  rep("r", 8))) %>% 
-  kable_styling("striped", full_width = FALSE) %>% 
-  add_header_above(c(" " = 1, "Two-Hour Averages" = 2, "Daily Averages" = 2)) %>% 
-  column_spec(1, border_right = TRUE) %>% 
-  column_spec(3, border_right = TRUE) %>% 
+two_hour_table %>%
+  bind_cols(daily_table) %>%
+  select(Species, Quantile, p.Value, Quantile1, p.Value1) %>%
+  setNames(c("Species", "Quantile", "p.Value", "Quantile", "p.Value")) %>%
+  kable(escape = FALSE, align = c("c",  rep("r", 8))) %>%
+  kable_styling("striped", full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 2, "Daily Averages" = 2)) %>%
+  column_spec(1, border_right = TRUE) %>%
+  column_spec(3, border_right = TRUE) %>%
   collapse_rows(columns = 1)
 ```
 
