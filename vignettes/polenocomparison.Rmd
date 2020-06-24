@@ -51,6 +51,7 @@ library(goftest)
 library(kableExtra)
 library(tsibble)
 library(feasts)
+library(padr)
 
 # library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
 
@@ -526,11 +527,11 @@ number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_ro
   mutate_at(vars(total), ~ scales::percent(. / !!.y, accuracy = 1))) %>% 
   bind_cols %>% 
   mutate(Comment = c("All traps measured", "Three traps measured", "Two traps measured", "One trap measured", "None measured")) %>%
-  rename("Hourly-Values" = total,
-         "3Hour-Values" = total1,
-         "6Hour-Values" = total2,
-         "12Hour-Values" = total3,
-         "Daily-Values" = total4)
+  rename("Hourly-Values" = total...1,
+         "3Hour-Values" = total...2,
+         "6Hour-Values" = total...3,
+         "12Hour-Values" = total...4,
+         "Daily-Values" = total...5)
 
 number_traps_comb %>% 
   bind_rows() %>% 

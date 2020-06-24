@@ -5,11 +5,10 @@ author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 always_allow_html: TRUE
 output:
+  word_document: default
   html_document:
     df_print: paged 
-  word_document: default
   pdf_document: default
-
 ---
 
 # Setup
@@ -20,7 +19,7 @@ output:
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -46,10 +45,11 @@ library(here)
 library(lme4)
 library(psych)
 library(robustlmm)
+library(nparcomp)
 library(goftest)
 library(kableExtra)
-
-# library(ggthemr)
+library(AeRobiology)
+library(ggthemr) # On Windows I load these functions directly from the R-folder of this project, because installing from gitlab is not possible
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -540,7 +540,7 @@ So it seems that it actually happens often that only a fraction of the traps is 
 ```{r}
 # How many two hour average concentrations are NA for bi-hourly values?
 
-map(data_hours2_raw, ~.x %>% filter(is.na(Total)))
+# map(data_hours2_raw, ~.x %>% filter(is.na(Total)))
 
 # There are only three missing concentrations for 2-hour averages and only in one line per trap. Hence we have no missing measurements for the highest temporal resolution.
 ```
@@ -554,7 +554,7 @@ Several metrics were calculated: the frequency of occurrence for each pollen was
 
 These metrics are well-known and usually part of a Pollen Measurement study. It is common to calculate the means before setting values outside the blooming season to NA. Hence I created a data_raw list of tibbles above just for that purpose.
 
-```{r eval = FALSE}
+```{r }
 
 occurence_raw <- data_daily_raw %>% 
   bind_rows %>% 
@@ -699,7 +699,7 @@ sd_tb_hours2 <- map(sd_list_hours2, ~.x %>%
 sd_tb_hours2 %>% 
   bind_cols(sd_tb_daily) %>% 
   mutate_if(is.numeric, ~round(., 2)) %>% 
-  select(-name1) %>% 
+  select(-name...6) %>% 
   setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
   kable() %>% 
   kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
@@ -757,7 +757,7 @@ sd_daily_ind <- data_daily_raw %>%
 sd_2hour_ind %>% 
   bind_cols(sd_daily_ind) %>% 
   mutate_if(is.numeric, ~round(., 2)) %>% 
-  select(-name1) %>% 
+  select(-name...6) %>% 
   setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
   kable() %>% 
   kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
@@ -860,7 +860,7 @@ sd_tb_hours2 <- map(sd_list_hours2, ~.x %>%
 sd_tb_hours2 %>% 
   bind_cols(sd_tb_daily) %>% 
   mutate_if(is.numeric, ~round(., 2)) %>% 
-  select(-name1) %>% 
+  select(-name...6) %>% 
   setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
   kable() %>% 
   kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
@@ -908,12 +908,13 @@ mean_temp <- map(data_contr, ~ .x %>%
 
 sd_mean_temp <- sd_temp %>% 
   bind_cols(mean_temp) %>% 
-  mutate(Total = Total / Total1,
-         Fraxinus = Fraxinus / Fraxinus1,
-         Poaceae = Poaceae / Poaceae1,
-         Betula = Betula / Betula1,
-         Quercus = Quercus / Quercus1,
-         Pinus = Pinus / Pinus1
+  mutate(Average = Average...1,
+         Total = Total...2 / Total...9,
+         Fraxinus = Fraxinus...3 / Fraxinus...10,
+         Poaceae = Poaceae...4 / Poaceae...11,
+         Betula = Betula...5 / Betula...12,
+         Quercus = Quercus...6 / Quercus...13,
+         Pinus = Pinus...7 / Pinus...14
          ) %>% 
   select(Average:Pinus)
 
@@ -2243,6 +2244,7 @@ daily_anova <- map(fit_anova_contr, ~.x %>% extract(c(5)))
 
 two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>% 
   summary %>% 
+  unclass() %>% 
   bind_cols() %>% 
   as_tibble %>% 
   bind_cols(name = c("Trap", "Residuals")) %>% 
@@ -2253,9 +2255,9 @@ two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>
          PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
   bind_rows
 
-
 daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>% 
   summary %>% 
+  unclass() %>% 
   bind_cols() %>% 
   as_tibble %>% 
   bind_cols(name = c("Trap", "Residuals")) %>% 
@@ -2269,7 +2271,7 @@ daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>%
 options(knitr.kable.NA = '')
 
 two_hour_table_anova %>% 
-  bind_cols(daily_table_anova) %>% 
+  bind_cols(daily_table_anova %>% setNames(paste0(names(daily_table_anova), 1))) %>% 
   mutate(Species = rep(species_contr, each = 2)) %>% 
   select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
   setNames(c("Species", "Factor", "Df", "Sum Sq", "Pr(>F)", "PES", "Df", "Sum Sq", "Pr(>F)", "PES")) %>% 
@@ -2356,7 +2358,7 @@ daily_table <- daily_contr %>%
   mutate(Species = species_contr)
 
 two_hour_table %>%
-  bind_cols(daily_table) %>%
+  bind_cols(daily_table %>% setNames(paste0(names(daily_table), 1))) %>%
   select(Species, Quantile, p.Value, Quantile1, p.Value1) %>%
   setNames(c("Species", "Quantile", "p.Value", "Quantile", "p.Value")) %>%
   kable(escape = FALSE, align = c("c",  rep("r", 8))) %>%
@@ -2365,7 +2367,7 @@ two_hour_table %>%
   column_spec(1, border_right = TRUE) %>%
   column_spec(3, border_right = TRUE) %>%
   collapse_rows(columns = 1)
->>>>>>> 77a40a232a6736859e3f940432b6a570bc87af77
+
 ```
 
 
@@ -2497,6 +2499,7 @@ daily_anova <- map(fit_anova_contr, ~.x %>% extract(c(5)))
 
 two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>% 
   summary %>% 
+  unclass() %>% 
   bind_cols() %>% 
   as_tibble %>% 
   bind_cols(name = c("Trap", "Residuals")) %>% 
@@ -2510,6 +2513,7 @@ two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>
 
 daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>% 
   summary %>% 
+  unclass() %>% 
   bind_cols() %>% 
   as_tibble %>% 
   bind_cols(name = c("Trap", "Residuals")) %>% 
@@ -2523,7 +2527,7 @@ daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>%
 options(knitr.kable.NA = '')
 
 two_hour_table_anova %>% 
-  bind_cols(daily_table_anova) %>% 
+  bind_cols(daily_table_anova %>% setNames(paste0(names(daily_table_anova), 1))) %>%
   mutate(Species = rep(species_contr, each = 2)) %>% 
   select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
   setNames(c("Species", "Factor", "Df", "Sum Sq", "Pr(>F)", "PES", "Df", "Sum Sq", "Pr(>F)", "PES")) %>% 
@@ -2571,7 +2575,7 @@ two_hour_table %>%
   mutate(`p-Value` = if_else(`p-Value` < 0.05,
                              cell_spec(`p-Value`, color = "red"),
                              cell_spec(`p-Value`))) %>%
-  bind_cols(daily_table) %>% 
+  bind_cols(daily_table %>% setNames(paste0(names(daily_table), 1))) %>%
   mutate(species = rep(species_contr, each = 3),
          species = cell_spec(species, angle = 270, align =  "center")) %>% 
   select(species, everything()) %>% 
@@ -2705,7 +2709,7 @@ daily_table <- daily_contr %>%
   select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
 
 two_hour_table %>% 
-  bind_cols(daily_table) %>% 
+  bind_cols(daily_table %>% setNames(paste0(names(daily_table), 1))) %>%
   mutate(species = rep(species_contr, each = 3),
          species = cell_spec(species, angle = 270, align =  "center")) %>% 
   select(species, everything()) %>% 
@@ -2739,6 +2743,7 @@ daily_anova <- map(fit_anova_contr, ~.x %>% extract(c(5)))
 
 two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>% 
   summary %>% 
+  unclass() %>% 
   bind_cols() %>% 
   as_tibble %>% 
   bind_cols(name = c("Trap", "Residuals")) %>% 
@@ -2752,6 +2757,7 @@ two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>
 
 daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>% 
   summary %>% 
+  unclass() %>% 
   bind_cols() %>% 
   as_tibble %>% 
   bind_cols(name = c("Trap", "Residuals")) %>% 
@@ -2765,7 +2771,7 @@ daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>%
 options(knitr.kable.NA = '')
 
 two_hour_table_anova %>% 
-  bind_cols(daily_table_anova) %>% 
+  bind_cols(daily_table_anova %>% setNames(paste0(names(daily_table_anova), 1))) %>%
   mutate(Species = rep(species_contr, each = 2)) %>% 
   select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
   setNames(c("Species", "Factor", "Df", "Sum Sq", "Pr(>F)", "PES", "Df", "Sum Sq", "Pr(>F)", "PES")) %>% 
