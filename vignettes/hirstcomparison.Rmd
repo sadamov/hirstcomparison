@@ -255,9 +255,7 @@ data <- measurements_after_exclusion %>%
 ```
 
 ```{r eval = FALSE}
-gg_missmap <- data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
-
-gg_missmap
+data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
 ```
 
 
@@ -1575,6 +1573,9 @@ http://www.jerrydallal.com/LHSP/compare.htm
 # Export Plots for Paper
 
 ```{r}
-save_kable(kable_number_traps, "table_number_traps.png")
+ggsave("figure_missmap.png", gg_missmap)
+kable_number_traps, "table_number_traps.png")
+
+
 ```
 
