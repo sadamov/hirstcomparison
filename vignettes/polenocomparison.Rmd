@@ -93,7 +93,7 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
          date = date(timestamp),
          hour = hour(timestamp) + 1,
          trap = paste0("poleno", .y)) %>%
-  filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+  filter(timestamp > ymd_hms("2020-03-03 00:00:00"),
          timestamp <= ymd_hms("2020-05-08 00:00:00")))
 
 if (species != "total"){
@@ -127,7 +127,7 @@ data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>%
   as_tibble() %>% 
   select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
   mutate(timestamp = dmy_hm(timestamp)) %>% 
-  filter(timestamp > ymd_hms("2020-03-01 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
+  filter(timestamp > ymd_hms("2020-03-03 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
          timestamp <= ymd_hms("2020-05-08 00:00:00")) %>% 
   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
 
@@ -546,6 +546,8 @@ number_traps_comb %>%
 
 ```
 
+
+
 ### Number of Measurements per Hour
 
 ```{r eval = TRUE}
@@ -593,6 +595,33 @@ ggthemr("fresh")
 
 
 The Poleno-traps allow to investigate different time-averages very easily. For the Hirst traps we only get 1hour, 3hour and daily averages from the DWH. The 3hour avg were excluded from this analysis because the observations don't appear to be iid (they are calcuated every hour) and the hirst traps were already compared ingreat detail in the hirstcomparison vignette. In the following we investigate the three poleno traps.
+
+
+# Tabular Comparison
+
+```{r}
+data_aggs_pol <- list(data_daily_comb %>% filter(trap != "hirst"), 
+                      data_hours12_pol %>% bind_rows, 
+                      data_hours6_pol %>% bind_rows, 
+                      data_hours3_pol %>% bind_rows, 
+                      data_hourly_comb %>% filter(trap != "hirst")) 
+
+map(data_aggs_pol, ~.x %>% 
+    mutate(sd = sd(total, na.rm = TRUE),
+           se = sd / 3,
+           mean = mean(total, na.rm = TRUE),
+           cv = sd/mean) %>% 
+    filter(timestamp == as.Date("2020-03-02"),
+           trap == "poleno2") %>% 
+    select(sd, mean, se, cv)) %>% 
+  bind_rows %>% 
+  mutate(Average = c("Daily", "12-Hours", "6-Hours", "3-Hours", "Hourly")) %>% 
+  select(Average, everything()) %>% 
+  kable %>% 
+  kable_styling("striped")
+
+
+```
 
 # Visualization
 
@@ -1126,6 +1155,43 @@ summary(fit_rlmer)
 ```
 
 # Measurement Spread and Error Distribution
+
+## Histograms of Concentration Groups
+
+```{r fig.height=7, fig.width=10}
+gg_hist_conc_pol <- list()
+
+data_errors_pol <- data_hourly_comb %>%
+  filter(trap != "hirst") %>% 
+  group_by(timestamp) %>% 
+  mutate(mean_conc = mean(total)) %>% 
+  mutate(conc = case_when(
+    mean_conc >= 0 & mean_conc < 10 ~ "Group00_10",
+    mean_conc >= 10 & mean_conc < 20 ~ "Group10_20",
+    mean_conc >= 20 & mean_conc < 50 ~ "Group20_50",
+    mean_conc >= 50 & mean_conc < 100 ~ "Group50_100",
+    mean_conc >= 100 & mean_conc < 300 ~ "Group100_300",
+    mean_conc >= 300 ~ "Group300"),
+    type = "total") %>% 
+  filter(!is.na(conc)) %>% # We only want timestamps where all three traps measured
+  select(timestamp, trap, total, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = total) %>% 
+  ungroup
+
+data_hourly_comb %>% summary
+
+conc_y_label <- c(2.8, 1.1, 0.75, 1, 1.2, 1.5)
+names(conc_y_label) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
+  gg_hist_conc_pol[[j]] <- plot_hist_dt(data_errors_pol, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE, y_label = conc_y_label[j])
+}
+
+ggarrange(plotlist = gg_hist_conc_pol, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+
+```
+
 
 A second chapter of the paper should further elaborate on the relative errors between the traps.
 We are mostly interested to observe the difference of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.

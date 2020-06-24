@@ -307,13 +307,16 @@ plot_hist_dt <- function(data, species, n_test = 1, samples = 10000, plots = FAL
          nrow() / 3,
          sd = sprintf("%.2f", round(sd(errors$error, na.rm = TRUE), 2), 2),
          x = 1.7,
-         y = y_label) # Number of Traps
+         y = y_label) %>%
+    mutate(label = if_else(resolution == "2hour" & species == "Group00_10",
+      paste("Observations:", obs),
+      paste("Observations:", obs, "\n SD:", sd)))
 
   gg <- errors %>%
     ggplot(aes(x=error, y = ..density..)) +
     geom_histogram(binwidth = 0.05) +
     geom_density(col = swatch()[4]) +
-    geom_label(data = obs_tb, aes(label = paste("Observations:", obs, "\n SD:", sd), x = x, y = y)) +
+    geom_label(data = obs_tb, aes(label = label, x = x, y = y)) +
     geom_rug(aes(y = 0), position = position_jitter(height = 0), col = swatch()[5]) +
     coord_cartesian(xlim = c(0, 2)) +
     labs(x = species)

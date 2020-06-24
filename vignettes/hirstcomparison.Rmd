@@ -19,7 +19,7 @@ output:
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -559,10 +559,10 @@ These metrics are well-known and usually part of a Pollen Measurement study. It 
 occurence_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~sum(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~sum(. !=0, na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~sum(. !=0, na.rm = TRUE)) %>% 
   ungroup() 
 
 names <- names(occurence_raw)
@@ -577,10 +577,10 @@ occurence_raw <- occurence_raw %>%
 maximum_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~max(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -591,10 +591,10 @@ maximum_raw <- data_daily_raw %>%
 average_raw <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -605,10 +605,10 @@ average_raw <- data_daily_raw %>%
 spi_raw <- data_daily_raw %>% # Seasonal Pollen Integral
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~sum(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~sum(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -621,7 +621,7 @@ occurence_raw %>%
   inner_join(maximum_raw, by = "name") %>% 
   inner_join(average_raw, by = "name") %>% 
   inner_join(spi_raw, by = "name") %>% 
-  filter(name %in% species_selection) %>% 
+  filter(name %in% c(species_selection, "Total")) %>% 
   arrange(desc(trap8.y.y)) %>% 
   setNames(c("Name", rep(paste0("trap", c(2, 4, 8)), times = 4))) %>% 
   kable(escape = FALSE) %>%
@@ -631,21 +631,19 @@ occurence_raw %>%
   column_spec(2:13, width = "2.5cm") %>% 
   column_spec(seq(1, 13, 3), border_right = TRUE)
 
-
-
 ```
 
-## Deviations of the Means
+## Variability of the Means
 
 ```{r}
 
 maximum_raw_hours2 <- data_hours2_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~max(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -656,10 +654,10 @@ maximum_raw_hours2 <- data_hours2_raw %>%
 average_raw_hours2<- data_hours2_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -678,7 +676,7 @@ sd_tb_daily <- map(sd_list_daily, ~.x %>%
          mean = mean(value),
          cv = sd/mean) %>% 
   filter(trap == "trap2",
-         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+         name %in% c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
   select(name, sd, mean, se, cv, mean)) %>% 
   bind_rows %>% 
   ungroup
@@ -691,7 +689,7 @@ sd_tb_hours2 <- map(sd_list_hours2, ~.x %>%
          mean = mean(value),
          cv = sd/mean) %>% 
   filter(trap == "trap2",
-         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+         name %in% c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
   select(name, sd, mean, se, cv, mean)) %>% 
   bind_rows %>% 
   ungroup
@@ -706,29 +704,29 @@ sd_tb_hours2 %>%
   add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
   column_spec(1, border_right = TRUE) %>% 
   column_spec(5, border_right = TRUE) %>% 
-  pack_rows(start_row = 1, end_row = 5, group_label = "Max. Value") %>% 
-  pack_rows(start_row = 6, end_row = 10, group_label = "Avg. Value") 
+  pack_rows(start_row = 1, end_row = 6, group_label = "Max. Value") %>% 
+  pack_rows(start_row = 7, end_row = 12, group_label = "Avg. Value") 
 
 
 
 ```
 
-## Deviations of the Individual Measurements
+## Variability of the Individual Measurements
 
 ```{r}
 
 sd_2hour_ind <- data_hours2_raw %>% 
   bind_rows %>% 
   group_by(date, hour, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
-  pivot_longer(Castanea:Picea, names_to = "name", values_to = "value") %>% 
+  pivot_longer(Castanea:Total, names_to = "name", values_to = "value") %>% 
   group_by(name) %>% 
   mutate(sd_ind = sd(value),
          mean_ind = mean(value),
          se_ind = sd_ind / n(),
          cv_ind = sd_ind/mean_ind) %>% 
-    filter(name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
+    filter(name %in% c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
          trap == 2,
          date == as.Date("2013-04-02"),
          hour == 2) %>% 
@@ -739,15 +737,15 @@ sd_2hour_ind <- data_hours2_raw %>%
 sd_daily_ind <- data_daily_raw %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
-  pivot_longer(Castanea:Picea, names_to = "name", values_to = "value") %>% 
+  pivot_longer(Castanea:Total, names_to = "name", values_to = "value") %>% 
   group_by(name) %>% 
   mutate(sd_ind = sd(value),
          mean_ind = mean(value),
          se_ind = sd_ind / n(),
          cv_ind = sd_ind/mean_ind) %>% 
-    filter(name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
+    filter(name %in% c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
          trap == 2,
          date == as.Date("2013-04-02")) %>% 
   select(name, sd_ind:cv_ind) %>% 
@@ -1758,7 +1756,7 @@ data_errors_conc_raw <- data_errors_raw %>%
     mean >= 20 & mean < 50 ~ "Group20_50",
     mean >= 50 & mean < 100 ~ "Group50_100",
     mean >= 100 & mean < 300 ~ "Group100_300",
-    mean >= 500 ~ "Group300"
+    mean >= 300 ~ "Group300"
   )) %>% 
   select(timestamp, trap, value, conc, type) %>% 
   pivot_wider(names_from = conc, values_from = value)
@@ -1844,8 +1842,12 @@ ggarrange(plotlist = gg_conc_hist, nrow = 3, ncol = 2) %>%
 ```{r fig.height=7, fig.width=10}
 gg_hist_conc <- list()
 
+if (resolution == "2hour"){
+  conc_y_label <- c(2.8, 1.1, 0.75, 1, 1.2, 1.5) 
+} else {
+  conc_y_label <- c(1, 1.4, 1.6, 1.8, 2, 2.5) # This has to be adjusted depending on the temporal averaging window. You could probably find a smart rule, I just did not find it :-)
+}
 
-conc_y_label <- c(1, 1.4, 1.6, 1.8, 2, 2.5) # This has to be adjusted depending on the temporal averaging window. You could probably find a smart rule, I just did not find it :-)
 names(conc_y_label) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
 
 for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
