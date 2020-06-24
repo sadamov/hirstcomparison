@@ -20,7 +20,7 @@ output:
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -30,9 +30,9 @@ knitr::opts_chunk$set(echo = FALSE,
                       error = FALSE, 
                       warning = FALSE, 
                       message = FALSE,
-                      fig.retina =2.5,
+                      fig.retina =3,
                       fig.width = 10,
-                      fig.height = 6,
+                      fig.height = 7,
                       out.width = "100%",
                       out.height = "100%")
 # This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
@@ -48,7 +48,8 @@ library(psych)
 library(robustlmm)
 library(goftest)
 library(kableExtra)
-library(ggthemr)
+
+# library(ggthemr)
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -61,6 +62,8 @@ devtools::load_all()
 # devtools::install_github('cttobin/ggthemr')
 
 ggthemr("fresh")
+
+
 
 # caTools and bitops are required to knit this vignette, those are not tracked by renv and must be installed by the user
 # Due to old R-Version caTools must be installed from CRAN Archive, in order to knit markdown documents.
@@ -256,6 +259,10 @@ data <- measurements_after_exclusion %>%
 
 ```{r eval = FALSE}
 data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+<<<<<<< HEAD
+=======
+
+>>>>>>> 77a40a232a6736859e3f940432b6a570bc87af77
 ```
 
 
@@ -329,9 +336,7 @@ data_hourly_raw <- map(data_raw, ~.x %>%
   group_by(date, hour, trap, line) %>% 
   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
   ungroup())
-
 data_hourly <- set_na(data_hourly_raw)
-
 
 data_hours2_raw <- map(data_raw, ~.x %>% 
   mutate(hms = format(datetime, "%H:%M:%S"),
@@ -418,8 +423,8 @@ data_daily_raw <- map(data_hourly_raw, ~.x %>%
 data_daily <- set_na(data_daily_raw)
 
 data_daily_raw <- map(data_daily_raw, ~.x %>% 
-  mutate(hour = paste0(sprintf("%02d", 23), ":59"),
-                       timestamp = ymd_hm(paste0(as.character(date), hour))))
+  mutate(hour = 23,
+         timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":59")))))
 
 ```
 
@@ -431,9 +436,9 @@ As described above there are two main options to prepare the data (otherwise we 
 Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
 
 
-```{r eval = FALSE}
+```{r eval = TRUE}
 
-data_aggs <- list(data_hourly, data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
+data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
 number_of_measurements <- map(data_aggs, ~.x %>% 
   bind_rows %>%   
   group_by(trap, date, hour) %>% 
@@ -461,19 +466,16 @@ number_traps <- map2(number_of_measurements, timesteps, ~ bind_rows(.x %>%
   mutate_at(vars(all_of(species_selection), Total), ~ scales::percent(round(. / !!.y, 2))) %>% 
   select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
 
-kable_number_traps <- number_traps %>% 
+number_traps %>% 
   bind_rows() %>% 
   kable() %>% 
   kable_styling("striped") %>% 
-  pack_rows("Hourly Averages", 1, 4) %>% 
-  pack_rows("2-Hour Averages", 5, 8) %>% 
-  pack_rows("3-Hour Averages", 9, 12) %>% 
-  pack_rows("6-Hour Averages", 13, 16) %>% 
-  pack_rows("12-Hour Averages", 17, 20) %>% 
-  pack_rows("Daily Averages", 21, 24) %>% 
+  pack_rows("2-Hour Averages", 1, 4) %>% 
+  pack_rows("3-Hour Averages", 5, 8) %>% 
+  pack_rows("6-Hour Averages", 9, 12) %>% 
+  pack_rows("12-Hour Averages", 13, 16) %>% 
+  pack_rows("Daily Averages", 17, 20) %>% 
   column_spec(c(1, 6), border_right = TRUE)
-
-kable_number_traps
 
 # For rendering docx documents
 # NOT ALLOWED AT MCH TO EXECUTE .exe file
@@ -484,7 +486,67 @@ kable_number_traps
 
 ```
 
+```{r eval = TRUE}
+number_traps <- map(number_of_measurements, ~ bind_rows(.x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 3)),  
+  .x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 2)),
+  .x %>% 
+    summarise_at(vars(all_of(species_selection), Total), ~sum(. == 1))) %>% 
+  select(Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
+
+number_of_timesteps <- map(number_traps, ~colSums(.x %>% select(Fraxinus:Total)))
+timesteps_tb <- map(number_of_timesteps, ~bind_rows(.x, .x, .x))
+
+number_traps_perc <- map2(number_traps, timesteps_tb, ~ .x / .y) %>% 
+  map(~.x %>% 
+        mutate_all( ~ scales::percent(round(., 2))) %>%
+        mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured")) %>%
+        select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
+
+number_traps_perc %>% 
+  bind_rows() %>% 
+  kable() %>% 
+  kable_styling("striped") %>% 
+  pack_rows("2-Hour Averages", 1, 3) %>% 
+  pack_rows("3-Hour Averages", 4, 6) %>% 
+  pack_rows("6-Hour Averages", 7, 9) %>% 
+  pack_rows("12-Hour Averages", 10, 12) %>% 
+  pack_rows("Daily Averages", 13, 15) %>% 
+  column_spec(c(1, 6), border_right = TRUE)
+
+  
+  
+
+```
+
+```{r}
+min_measurement <- map(c(list(data_raw, data_hourly), data_aggs), ~.x %>% 
+  bind_rows %>% 
+  select(Total) %>%  
+  filter(Total > 0) %>% 
+  min())
+
+min_measurement_tb <- tibble(Min_Measurement = min_measurement %>% unlist() %>% round(2),
+                             Resolution = c("10-Minutes", "Hourly", "2-Hour", "3-Hour", "6-Hour", "12-Hour", "Daily"))
+min_measurement_tb %>% 
+  kable %>% 
+  kable_styling("striped", full_width = FALSE)
+
+```
+
+
+
 So it seems that it actually happens often that only a fraction of the traps is measuring pollen. It can be expected that the discrepancies mostly occur during times with low pollen concentrations. For that reason, we can filter everything below 10 pollen /m^3 and see how the percentages change. But the results don't change dramatically after doing so.
+
+
+```{r}
+# How many two hour average concentrations are NA for bi-hourly values?
+
+map(data_hours2_raw, ~.x %>% filter(is.na(Total)))
+
+# There are only three missing concentrations for 2-hour averages and only in one line per trap. Hence we have no missing measurements for the highest temporal resolution.
+```
 
 
 # Tabular Comparison of Various Metrics
@@ -566,13 +628,310 @@ occurence_raw %>%
   arrange(desc(trap8.y.y)) %>% 
   setNames(c("Name", rep(paste0("trap", c(2, 4, 8)), times = 4))) %>% 
   kable(escape = FALSE) %>%
-  kable_styling(c("striped", "condensed"), full_width = FALSE) %>% 
+  kable_styling(c("striped", "condensed"), full_width = FALSE, font_size = 20) %>% 
   add_header_above(c(" " = 1, "Frequency of Occurence [#Days]" = 3, "Maximum Daily Concentration [#Pollen/m³]" = 3, "Average Daily Concentration [#Pollen/m³]" = 3, "Seasonal Pollen Integral [#Pollen/m³]" = 3)) %>% 
   column_spec(1, italic = TRUE) %>% 
   column_spec(2:13, width = "2.5cm") %>% 
   column_spec(seq(1, 13, 3), border_right = TRUE)
 
+
+
 ```
+
+## Deviations of the Means
+
+```{r}
+
+maximum_raw_hours2 <- data_hours2_raw %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average_raw_hours2<- data_hours2_raw %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+sd_list_daily <- list(maximum_raw, average_raw)
+sd_list_hours2 <- list(maximum_raw_hours2, average_raw_hours2)
+
+sd_tb_daily <- map(sd_list_daily, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+  
+sd_tb_hours2 <- map(sd_list_hours2, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_tb_hours2 %>% 
+  bind_cols(sd_tb_daily) %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
+  select(-name1) %>% 
+  setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(1, border_right = TRUE) %>% 
+  column_spec(5, border_right = TRUE) %>% 
+  pack_rows(start_row = 1, end_row = 5, group_label = "Max. Value") %>% 
+  pack_rows(start_row = 6, end_row = 10, group_label = "Avg. Value") 
+
+
+
+```
+
+## Deviations of the Individual Measurements
+
+```{r}
+
+sd_2hour_ind <- data_hours2_raw %>% 
+  bind_rows %>% 
+  group_by(date, hour, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  pivot_longer(Castanea:Picea, names_to = "name", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd_ind = sd(value),
+         mean_ind = mean(value),
+         se_ind = sd_ind / n(),
+         cv_ind = sd_ind/mean_ind) %>% 
+    filter(name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
+         trap == 2,
+         date == as.Date("2013-04-02"),
+         hour == 2) %>% 
+  select(name, sd_ind:cv_ind) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_daily_ind <- data_daily_raw %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  pivot_longer(Castanea:Picea, names_to = "name", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd_ind = sd(value),
+         mean_ind = mean(value),
+         se_ind = sd_ind / n(),
+         cv_ind = sd_ind/mean_ind) %>% 
+    filter(name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus"),
+         trap == 2,
+         date == as.Date("2013-04-02")) %>% 
+  select(name, sd_ind:cv_ind) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_2hour_ind %>% 
+  bind_cols(sd_daily_ind) %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
+  select(-name1) %>% 
+  setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(1, border_right = TRUE) %>% 
+  column_spec(5, border_right = TRUE)
+
+
+
+```
+
+
+```{r}
+
+maximum_raw_hours2 <- data_hours2%>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average_raw_hours2 <- data_hours2 %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+maximum_raw_daily <- data_daily %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+average_raw_daily <- data_daily %>% 
+  bind_rows %>% 
+  group_by(date, trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  group_by(trap) %>% 
+  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  ungroup()%>% 
+  data.table::transpose() %>% 
+  setNames(paste0("trap", c(2, 4, 8))) %>% 
+  mutate(name = names) %>% 
+  filter(name != "trap") %>% 
+  mutate_at(vars(starts_with("trap")), round)
+
+sd_list_daily <- list(maximum_raw_daily, average_raw_daily)
+sd_list_hours2 <- list(maximum_raw_hours2, average_raw_hours2)
+
+sd_tb_daily <- map(sd_list_daily, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+  
+sd_tb_hours2 <- map(sd_list_hours2, ~.x %>% 
+  pivot_longer(cols = trap2:trap8, names_to = "trap", values_to = "value") %>% 
+  group_by(name) %>% 
+  mutate(sd = sd(value),
+         se = sd / 3,
+         mean = mean(value),
+         cv = sd/mean) %>% 
+  filter(trap == "trap2",
+         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+  select(name, sd, mean, se, cv, mean)) %>% 
+  bind_rows %>% 
+  ungroup
+
+sd_tb_hours2 %>% 
+  bind_cols(sd_tb_daily) %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
+  select(-name1) %>% 
+  setNames(c(names(sd_tb_hours2), names(sd_tb_hours2 %>% select(-name)))) %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE, font_size = 16) %>% 
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(1, border_right = TRUE) %>% 
+  column_spec(5, border_right = TRUE) %>% 
+  pack_rows(start_row = 1, end_row = 5, group_label = "Max. Value") %>% 
+  pack_rows(start_row = 6, end_row = 10, group_label = "Avg. Value") 
+
+
+
+```
+
+
+```{r}
+
+
+data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
+names(data_aggs) <- c("data_hours2", "data_hours3", "data_hours6", "data_hours12", "data_daily")
+
+data_anova_contr <- map(data_aggs, ~map(.x, ~.x %>%
+  mutate(timestamp = ymd_hm(paste0(date, hour)))))
+
+data_contr <- map(data_anova_contr, ~.x %>% 
+  bind_rows() %>% 
+  mutate(trap = as.factor(trap)) %>% 
+  group_by(trap, timestamp) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+  ungroup)
+
+data_contr_tf <- map(data_contr, ~.x %>% 
+  mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~log(. + 1)))
+
+sd_temp <- map(data_contr, ~ .x %>% 
+  summarise_at(vars(c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")), sd, na.rm = TRUE)) %>% 
+  bind_rows %>% 
+  mutate(Average = c("2-Hour", "3-Hour", "6-Hour", "12-Hour", "Daily")) %>% 
+  select(Average, everything())
+
+mean_temp <- map(data_contr, ~ .x %>% 
+  summarise_at(vars(c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")), mean, na.rm = TRUE)) %>% 
+  bind_rows %>% 
+  mutate(Average = c("2-Hour", "3-Hour", "6-Hour", "12-Hour", "Daily")) %>% 
+  select(Average, everything())
+
+sd_mean_temp <- sd_temp %>% 
+  bind_cols(mean_temp) %>% 
+  mutate(Total = Total / Total1,
+         Fraxinus = Fraxinus / Fraxinus1,
+         Poaceae = Poaceae / Poaceae1,
+         Betula = Betula / Betula1,
+         Quercus = Quercus / Quercus1,
+         Pinus = Pinus / Pinus1
+         ) %>% 
+  select(Average:Pinus)
+
+sd_temp %>% 
+  bind_rows(mean_temp) %>% 
+  bind_rows(sd_mean_temp) %>% 
+  mutate_if(is.numeric, ~round(., 1)) %>% 
+  kable(escape = TRUE) %>% 
+  kable_styling(full_width = FALSE, font_size = 12) %>% 
+  pack_rows(start_row = 1, end_row = 5, group_label = "SD") %>% 
+  pack_rows(start_row = 6, end_row = 10, group_label = "MEAN") %>% 
+  pack_rows(start_row = 11, end_row = 15, group_label = "SD/MEAN")
+
+```
+
 
 As described above we averaged the Pollen Counts from the 4 lines per trap and can now compare the traps based on Various Metrics.
 Typically we see that trap 8 shows higher measurements for a variety of species. Once the species and temporal-average are fixed, this can be discussed in more detail.
@@ -582,14 +941,15 @@ Typically we see that trap 8 shows higher measurements for a variety of species.
 Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window.
 
 ```{r }
+ggthemr("fresh")
 
-gg_list <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE)
+gg_comparison <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE, combined = TRUE)
 
-ggarrange(ggarrange(gg_list[[1]], gg_list[[2]], nrow = 2), gg_list[[3]]) %>%
-    annotate_figure(top = title)
-# ggsave(filename = "plot.png", plot = plot, width = 8, height = 4.5)
+gg_timeseries <- plot_hirst(species = species, resolution = resolution, group = "trap", traps = c(2, 4, 8), rm_zeros = TRUE, combined = FALSE)[[1]] +
+  theme(legend.position = "right")
 
-gg_list[[1]]
+gg_comparison
+
 
 ```
 
@@ -619,6 +979,8 @@ if (resolution == "daily"){
   data_anova <- data_hours6
 } else if (resolution == "3hour"){
   data_anova <- data_hours3
+} else if (resolution == "2hour"){
+  data_anova <- data_hours2
 } else if (resolution == "hourly"){
   data_anova <-data_hourly
 }
@@ -688,30 +1050,33 @@ corr_matrix <- map(methods, ~corr.test(
 
 ```
 
-```{r}
-
+```{r }
+ggthemr("fresh")
 ci <- map(corr_matrix, ~.x %>% 
   pluck(10)) %>% 
   bind_rows() %>% 
   round(2) %>% 
-  mutate(method = rep(methods, each = 3)) %>%  
-  mutate(ci = paste0("R-", tools::toTitleCase(method), ": ", lower.adj, " - ", upper.adj)) %>% 
-  pull(ci)
+  mutate(method = rep(methods, each = 3),
+         metric = rep(c("R-", "rho-", "tau-"), each = 3),
+         ci = tools::toTitleCase(paste0(metric, method, ": ", lower.adj, " - ", upper.adj)),
+         traps = rep(c(24, 28, 48), times = 3),
+         x = rep(c(3.5, 3.7, 3.3), each = 3),
+         y = rep(c(9, 8.5, 8), each = 3))
 
 gg1 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap4)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
+  geom_smooth(data = data_corr %>% filter(trap2 != 0), alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[1], "\n", ci[4], "\n", ci[7])), aes(x = 3.6, y = 9)) +
+  geom_label(data = ci %>% filter(traps == 24), aes(label = ci, x = x, y = y), parse = TRUE) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg2 <- data_corr %>% 
   ggplot(aes(x = trap2, y = trap8)) + 
   geom_point(alpha = 0.3) +
-  geom_smooth(alpha = 0.1) +
+  geom_smooth(data = data_corr %>% filter(trap2 != 0), alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[2], "\n", ci[5], "\n", ci[8])), aes(x = 3.6, y = 9)) +
+  geom_label(data = ci %>% filter(traps == 28), aes(label = ci, x = x, y = y), parse = TRUE) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 gg3 <- data_corr %>% 
@@ -719,13 +1084,15 @@ gg3 <- data_corr %>%
   geom_point(alpha = 0.3) +
   geom_smooth(alpha = 0.1) +
   geom_abline(slope = 1, intercept = 0, col = swatch()[4]) +
-  geom_label(label = c(paste(ci[3], "\n", ci[6], "\n", ci[9])), aes(x = 3.6, y = 9)) +
+  geom_label(data = ci %>% filter(traps == 48), aes(label = ci, x = x, y = y), parse = TRUE) +
   coord_cartesian(ylim = c(0, 10), xlim = c(0, 10))
 
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
 
-ggarrange(gg1, gg2, gg3, ncol = 3) %>%
+gg_corr <- ggarrange(gg1, gg2, gg3, ncol = 3) %>%
   annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+
+gg_corr
 ```
 
 
@@ -734,7 +1101,7 @@ ggarrange(gg1, gg2, gg3, ncol = 3) %>%
 
 The well established AB-method for clinical trials can be used here as well to compare the means and differences between traps. Again we see that trap 8 generally has higher measurements and that low concentrations lead to largest differences between the traps. The points lie within the two SD-line for the differences and hence the traps can be assumed to be strongly associated with each other. We also observe larger scattering of the points for lower concentrations.
 
-```{r fig.height=9}
+```{r}
 
 data_altman <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
@@ -762,7 +1129,7 @@ sd_diff <- data_altman %>%
 gg_ab1 <- data_altman %>% 
   ggplot(aes(x = mean24, y = diff24)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 8), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
+  coord_cartesian(xlim = c(min(data_altman$mean24), max(data_altman$mean24)), ylim = c(-sd_diff[1] * 4, sd_diff[1] * 4)) +  
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[1] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[1] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -772,7 +1139,7 @@ gg_ab1 <- data_altman %>%
 gg_ab2 <- data_altman %>% 
   ggplot(aes(x = mean28, y = diff28)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 8), ylim = c(-sd_diff[2] * 4, sd_diff[2] * 4)) +  
+  coord_cartesian(xlim = c(min(data_altman$mean28), max(data_altman$mean28)), ylim = c(-sd_diff[2] * 4, sd_diff[2] * 4)) +  
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[2] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[2] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -782,7 +1149,7 @@ gg_ab2 <- data_altman %>%
 gg_ab3 <- data_altman %>% 
   ggplot(aes(x = mean48, y = diff48)) +
   geom_point(alpha = 0.5) +
-  coord_cartesian(xlim = c(0, 8), ylim = c(-sd_diff[3] * 4, sd_diff[3] * 4)) +  
+  coord_cartesian(xlim = c(min(data_altman$mean48), max(data_altman$mean48)), ylim = c(-sd_diff[3] * 4, sd_diff[3] * 4)) +  
   geom_abline(slope = 0, intercept = 0, col = swatch()[4], alpha = 0.8) +
   geom_abline(slope = 0, intercept = sd_diff[3] * 2, col = swatch()[4], alpha = 0.8, linetype = 3) +
   geom_abline(slope = 0, intercept = sd_diff[3] * (-2), col = swatch()[4], alpha = 0.8, linetype = 3) +
@@ -791,16 +1158,64 @@ gg_ab3 <- data_altman %>%
 
 title <- "Altman-Bland Plots for all Traps"
 
-ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise comparison between traps; grey line shows the Loess smother; \n the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+gg_ab <- ggarrange(gg_ab1, gg_ab2, gg_ab3, nrow = 3) %>%
+  annotate_figure( top = title, bottom = text_grob("Pairwise comparison of traps; grey line shows the Loess smother; the red line shows a theroratical perfect agreement between two traps of zero. \n The dashed red line shows the 2 * sd of the differences, where we expect the points to lie within.", color = swatch()[1], face = "italic", size = 12))
+
+gg_ab
   
 
 ```
 
+```{r}
+data_altman_adj <- data_transformed %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+  mutate(mean248 = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
+                        rowSums(.[2:4], na.rm = TRUE) / 3, 
+                        NA_real_),
+         diff2 = trap2 - mean248,
+         diff4 = trap4 - mean248,
+         diff8 = trap8 - mean248) %>% 
+  pivot_longer(diff2:diff8, names_to = "trap", values_to = "diff")
+
+gg_ab_adj <- data_altman_adj %>% 
+  ggplot(aes(x = mean248, y = diff, col = trap)) +
+  geom_point(alpha = 0.25) +
+  geom_smooth(alpha = 0.1) +
+  labs(y = "Difference(Trap_i - Mean)", x = "Mean(trap2, trap4, trap8)") +
+  ggtitle("Difference of Individual 2-Hour Measurements from Each Trap\nand the Common Mean")
+
+data_altman_adj_exp <- data_transformed %>% 
+  select(!!sym(species), trap, timestamp) %>% 
+  pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
+  setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>% 
+  mutate(mean248 = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8),
+                        rowSums(.[2:4], na.rm = TRUE) / 3, 
+                        NA_real_),
+         diff2 = trap2 - mean248,
+         diff4 = trap4 - mean248,
+         diff8 = trap8 - mean248) %>% 
+  pivot_longer(diff2:diff8, names_to = "trap", values_to = "diff") %>% 
+  mutate(diff = exp(diff),
+         mean248 = exp(mean248))
+
+gg_ab_adj_exp <- data_altman_adj %>% 
+  ggplot(aes(x = mean248, y = diff, col = trap)) +
+  geom_point(alpha = 0.25) +
+  geom_smooth(alpha = 0.1) +
+  coord_cartesian(ylim = c(0, 4)) +
+  labs(y = "Difference(Trap_i - Mean)", x = "Mean(trap2, trap4, trap8)") +
+  ggtitle("Difference of Individual 2-Hour Measurements from Each Trap\nand the Common Mean")
+  
+gg_ab_adj
+```
+
+
 #### For Different Minimum Concentration-Thresholds
 
 
-```{r fig.height=9, eval = FALSE}
+```{r eval = FALSE}
 
 gg_ab_threshold <- list()
 
@@ -998,7 +1413,7 @@ Assumptions:
 https://en.Wikipedia.org/wiki/Tukey%27s_range_test
 
 ```{r}
-hsd <- TukeyHSD(fit_anova)
+hsd <- TukeyHSD(fit_anova) # This version of Tukey with one-way anova actually shows the differences in the mean
 plot(hsd)
 ```
 
@@ -1071,7 +1486,7 @@ The Wilcoxon signed-rank test assumes that the data are distributed symmetricall
 data_transformed %>% 
   ggplot(aes(x = !!sym(species))) +
   geom_histogram(alpha = 0.7, bins = 50) +
-  # geom_freqpoly(col = swatch()[3], bins = 30) +
+  # geom_freqpoly(col = swatch()[3], bins = 30) +/
   # geom_density(col = swatch()[5]) +
   geom_vline(xintercept = median(data_transformed %>% pull(!!sym(species)), na.rm = TRUE), col = swatch()[4]) +
   ggtitle("Histogram of the Transformed Data With the Median (Red Line)")
@@ -1107,11 +1522,26 @@ dunn.test::dunn.test(data_transformed %>% pull(!!sym(species)),
                      data_transformed$trap,
                      method = "holm") # Try different FEWR /FDR adjustments here
 
+hirst_npar_contrasts <- nparcomp::nparcomp(as.formula(paste(species, "~ trap")), data_transformed, conf.level = 0.95, alternative = "two.sided", type = "Tukey") # ANOVA and regression compare means, while WMW methods calculate the probability that a member of one group will score higher than a member of another group. Being sensitive to differences in the shape of the distribution, which Bruce points out, is not an adverse side-effect. It is the actual purpose of the test, because differences in distribution shape will lead to members of one group out-scoring members of another. https://www.researchgate.net/post/Which_post_hoc_test_is_best_to_use_after_Kruskal_Wallis_test
+
+gg_contrasts <- hirst_npar_contrasts$Analysis %>% 
+  ggplot(aes(x = Estimator, y = Comparison)) +
+  geom_point() +
+  geom_errorbarh(aes(xmax = Upper, xmin = Lower)) +
+  geom_label(aes(label = paste("p-Value:", round(p.Value, 2))), nudge_y = 0.2) +
+  ggtitle(paste0("Robust Tukey Contrasts for ", tools::toTitleCase(resolution), "-Averages of All Three Traps"))
+
 conover.test::conover.test(data_transformed %>% pull(!!sym(species)),
                      data_transformed$trap,
                      method = "holm")
 
+gg_contrasts
+citation("nparcomp")
+
 ```
+
+
+
 
 For Donover the ECDF curves are not allow to cross each other. This is actually not given for quite a few species and averaging windows. Maybe it's safer to use Dunn's test (they were usually comparable in terms of the return P-value statistics).
 
@@ -1255,31 +1685,228 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ```
 
+
+## Relative Errors
+
+```{r}
+if (resolution == "daily"){
+  data_errors_raw <- data_daily_raw
+} else if (resolution == "12hour"){
+  data_errors_raw <- data_hours12_raw
+} else if (resolution == "6hour"){
+  data_errors_raw <- data_hours6_raw
+} else if (resolution == "3hour"){
+  data_errors_raw <- data_hours3_raw
+} else if (resolution == "2hour"){
+  data_errors_raw <- data_hours2_raw
+} else if (resolution == "hourly"){
+  data_errors_raw <- data_hourly_raw
+}
+
+data_errors_raw <- data_errors_raw %>% 
+  bind_rows() %>% 
+  mutate(trap = as.factor(trap),
+         hour = paste0(sprintf("%02d", hour), ":00"),
+         timestamp = ymd_hm(paste0(as.character(date), hour))) %>% 
+  group_by(trap, timestamp) %>% 
+  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+  ungroup  %>% 
+  mutate(type = "dummy",
+         hour = hour(timestamp),
+         date = date(timestamp))
+
+# This is part of the code of the set_na() function in this package. slightly adjusted for this specific setup
+measurements_to_exclude <- data_errors_raw %>%
+    group_by(trap, timestamp) %>%
+    replace(is.na(.), 0) %>% # This should do nothing :-)
+    mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), .funs = list(exclude = ~mean(.))) %>%
+    ungroup() %>%
+    group_by(timestamp) %>%
+    mutate_at(vars(all_of(paste0(c(species_selection, "Total", "Group1", "Group2", "Group3", "Group4", "Group5"), "_exclude"))), function(x){
+      if(any(as.integer(x) == 0))
+        return(NA) # This will set all measurements to NA if no trap measured any pollen
+      else
+        return(0)
+    }) %>%
+    ungroup()
+
+measurements_after_exclusion <- map2_df(data_errors_raw %>% select(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), 
+                                        measurements_to_exclude %>% select(contains("exclude")), 
+                                        ~.x + as.integer(.y))
+
+data_errors <- measurements_after_exclusion %>%
+    bind_cols(measurements_to_exclude %>%
+                select(timestamp, date, hour, trap, type))
+
+```
+
+### Concentration Groups
+
+```{r }
+data_errors_conc_raw <- data_errors_raw %>% 
+  select(-type) %>%
+  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
+  select(trap, timestamp, type, value) %>% 
+  pivot_wider(names_from = trap) %>% 
+  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
+  mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+         mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8), # For the density plots we want to see all observations, even if the mean was calculated based on only one trap.
+                          rowSums(.[3:5], na.rm = TRUE) / measuring_traps, 
+                          NA_real_)) %>% 
+  pivot_longer(trap2:trap8, names_to = "trap") %>% 
+  mutate(conc = case_when(
+    mean >= 0 & mean < 10 ~ "Group00_10",
+    mean >= 10 & mean < 20 ~ "Group10_20",
+    mean >= 20 & mean < 50 ~ "Group20_50",
+    mean >= 50 & mean < 100 ~ "Group50_100",
+    mean >= 100 & mean < 300 ~ "Group100_300",
+    mean >= 500 ~ "Group300"
+  )) %>% 
+  select(timestamp, trap, value, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = value)
+
+data_errors_conc <- data_errors %>% 
+  select(-type) %>%
+  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
+  select(trap, timestamp, type, value) %>% 
+  pivot_wider(names_from = trap) %>% 
+  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
+  mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+         mean = if_else(!is.na(trap2) & !is.na(trap4) & !is.na(trap8), # For the error fitting exercise we only look at timestamps where all three traps measured. This is again defined in the respective functions in used further below in the sampling section.
+                          rowSums(.[3:5], na.rm = TRUE) / measuring_traps, 
+                          NA_real_)) %>% 
+  pivot_longer(trap2:trap8, names_to = "trap") %>% 
+  mutate(conc = case_when(
+    mean >= 0 & mean < 10 ~ "Group00_10",
+    mean >= 10 & mean < 20 ~ "Group10_20",
+    mean >= 20 & mean < 50 ~ "Group20_50",
+    mean >= 50 & mean < 100 ~ "Group50_100",
+    mean >= 100 & mean < 300 ~ "Group100_300",
+    mean >= 300 ~ "Group300"
+  )) %>% 
+  select(timestamp, trap, value, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = value) %>% 
+  select(-"NA")
+
+gg_conc_dens <- list()
+gg_conc_hist <- list()
+
+labels_y <- list(1, 0.065, 0.025, 0.015, 0.004, 0.0015)
+labels_y_hist <- list(15, 13, 10, 10, 7.5, 3)
+names(labels_y) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+names(labels_y_hist) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
+  obs <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/3) %>% 
+    pull 
+  obs <- paste("# of Observations:", obs)
+  
+  gg_conc_dens[[j]] <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j)))  %>% 
+    ggplot() +
+    geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
+    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]]) +
+    coord_cartesian(xlim = c(0, NA))
+}
+
+gg_dens_conc <- ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Comparison of", tools::toTitleCase(resolution), "Measurements of the Three Traps for all Species and Different Concentration Groups."),
+                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
+
+# gg_dens_conc
+
+```
+
+```{r eval = FALSE}
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
+  obs <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j))) %>% 
+    summarise(n()/3) %>% 
+    pull 
+
+  obs <- paste("# of Observations:", obs)
+  
+  gg_conc_hist[[j]] <- data_errors_conc_raw %>% 
+    filter(!is.na(!!sym(j)))  %>% 
+    ggplot() +
+    geom_histogram(data = subset(data_errors_conc_raw, trap == "trap4"), aes(x = !!sym(j)), col = swatch()[3], fill = swatch()[3], alpha = 0.06, bins = 20) + 
+    geom_histogram(data = subset(data_errors_conc_raw, trap == "trap8"), aes(x = !!sym(j)), col = swatch()[4], fill = swatch()[4], alpha = 0.06, bins = 20) + 
+    geom_histogram(data = subset(data_errors_conc_raw, trap == "trap2"), aes(x = !!sym(j)), col = swatch()[2], fill = swatch()[2], alpha = 0.06, bins = 20)  + 
+    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y_hist[[j]])
+}
+
+ggarrange(plotlist = gg_conc_hist, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = "Comparison of Measurements of the Three Traps for all Pollen-Species and Different Concentration Groups.",
+                  bottom = text_grob("We are looking at Counts for all three traps to compare the measurements between them. Trap2 in blue, Trap4 in grey, Trap8 in red.", color = swatch()[1], face = "italic", size = 10))
+
+```
+
+```{r fig.height=7, fig.width=10}
+gg_hist_conc <- list()
+
+
+conc_y_label <- c(1, 1.4, 1.6, 1.8, 2, 2.5) # This has to be adjusted depending on the temporal averaging window. You could probably find a smart rule, I just did not find it :-)
+names(conc_y_label) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
+  gg_hist_conc[[j]] <- plot_hist_dt(data_errors_conc, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE, y_label = conc_y_label[j])
+}
+
+gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+```
+
+### Species
+
+```{r fig.height=7, fig.width=10}
+gg_hist_species <- list()
+
+conc_y_label_species <- c(3, 2.4, 1.6, 1.5, 2, 1.4)  # This has to be adjusted depending on the temporal averaging window. You could probably find a smart rule, I just did not find it :-)
+names(conc_y_label_species) <- c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")
+
+for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")){
+  gg_hist_species[[j]] <- plot_hist_dt(data_errors, j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE, y_label = conc_y_label_species[j])
+}
+gg_error_species <- ggarrange(plotlist = gg_hist_species, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Top-6 Species"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+```
+
+
+### Pollen Grain Size Groups
+
+```{r fig.height=7, fig.width=10}
+
+# I manually removed the fitted t-distributions stuff from the plot_hist_dt function for this and then put it back in afterwards.
+
+conc_y_label_size <- c(1.9, 1.8, 2.4, 1.3, 2, 2.5)  # This has to be adjusted depending on the temporal averaging window. You could probably find a smart rule, I just did not find it :-)
+names(conc_y_label_size) <- c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")
+
+gg_hist_groups <- list()
+
+for (j in c("Group1", "Group2", "Group3", "Group4", "Group5", "Total")){
+  gg_hist_groups[[j]] <- plot_hist_dt(data_errors, species = j, n_test = 1, samples = 1, plots = TRUE, tdist = FALSE, y_label = conc_y_label_size[j])
+}
+gg_error_size <- ggarrange(plotlist = gg_hist_groups, nrow = 3, ncol = 2) %>% 
+  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Five Pollen Size Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+
+
+```
+
 # Sample Blooming Season Starts and SPI with Theoretical Error Distribution
 
 This is investigatoy work in progress. We will take the mean values from the three traps above and then create bootstrap samples for the divergence from the mean. Based on these samples we will investigate the spread of the SPI and the Start of the Blooming Season; two metrics highly relevant for Pollen prediction. This analysis will be carried out on the most robust (i.e. daily-averages) values.
 
+Some of the following metrics only make sense with daily averages. Hence the daily data is hardcoded in this chapter. The sampling will only be carried out with daily values (as discussed with Regula Gehrig).
+
 ## For Different Species
 
-```{r fig.height=6, eval = FALSE}
+```{r eval = FALSE}
 # set.seed(123)
+data_sampling <- data_errors
 
-data_sampling <- data_daily %>% 
-  bind_rows() %>% 
-  mutate_at(vars(-trap, -date, -hour, -timestamp), ~if_else(. == 0, NA_real_, .)) %>% 
-  mutate(trap = as.factor(trap)) %>% 
-  group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup %>% 
-  mutate(type = "dummy")
-
-data_sampling_raw <- data_daily_raw %>% 
-  bind_rows() %>% 
-  mutate(trap = as.factor(trap)) %>% 
-  group_by(trap, timestamp) %>% 
-  summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-  ungroup  %>% 
-  mutate(type = "dummy")
+data_sampling_raw <- data_errors_raw
 
 gg_hist_species <- list()
 samples_species <- list()
@@ -1296,7 +1923,7 @@ ggarrange(plotlist = gg_hist_species, nrow = 3, ncol = 2) %>%
 ```
 
 
-```{r fig.height=8, eval = FALSE}
+```{r eval = FALSE}
 
 # The sampled errors from above are differences of each trap from the common mean (logarithmic).
 # To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
@@ -1314,7 +1941,7 @@ ggarrange(plotlist = gg_spi_species, ncol = 1) %>%
 ```
 
 
-```{r fig.height=7, eval = FALSE}
+```{r eval = FALSE}
 
 days <- data_sampling_raw %>% select(timestamp) %>% pull %>% unique
 
@@ -1329,15 +1956,16 @@ for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")){
         select(!!sym(j), trap, timestamp) %>%
         pivot_wider(names_from = trap, values_from = !!sym(j), timestamp) %>%
         setNames(c("timestamp", paste0("trap", c(2, 4, 8)))) %>%
-        mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                              rowSums(.[2:4], na.rm = TRUE) / 3,
+        mutate(measuring_traps = as.integer(!is.na(trap2)) + as.integer(!is.na(trap4)) + as.integer(!is.na(trap8)),
+               mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
+                              rowSums(.[2:4], na.rm = TRUE) / measuring_traps,
                               NA_real_)) %>%
         pull(mean) %>%
         na.omit()
     
       sampled_days <- map(mean_traps, ~ .x * pmax(0, samples_species[[j]]))
       
-      for (i in 1:1000){
+      for (i in 1:100){
         
         sampled_days_random <- map(sampled_days, ~sample(.x, 1)) %>% unlist()
   
@@ -1368,7 +1996,7 @@ ggarrange(plotlist = gg_season_start[-6], ncol = 2, nrow = 3) %>%
 
 ## For Different Pollen Size Groups
 
-```{r fig.height=6, eval = FALSE}
+```{r eval = FALSE}
 # set.seed(123)
 
 ggthemr("fresh")
@@ -1388,7 +2016,7 @@ ggarrange(plotlist = gg_hist_groups, nrow = 3, ncol = 2) %>%
 
 ```
 
-```{r fig.height=9, eval = FALSE}
+```{r eval = FALSE}
 
 # The sampled errors from above are differences of each trap from the common mean (logarithmic).
 # To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
@@ -1412,102 +2040,7 @@ annotate_figure(top = "Boxplot of Sampled SPI for Pollen Size Groups",
 ## For Different Pollen-Concentrations
 
 
-```{r fig.height=8, eval = FALSE}
-
-data_sampling_conc_raw <- data_sampling_raw %>% 
-  select(-type) %>%
-  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
-  select(trap, timestamp, type, value) %>% 
-  pivot_wider(names_from = trap) %>% 
-  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
-  mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                          rowSums(.[3:5], na.rm = TRUE) / 3, 
-                          NA_real_)) %>% 
-  pivot_longer(trap2:trap8, names_to = "trap") %>% 
-  mutate(conc = case_when(
-    mean >= 10 & mean < 20 ~ "Group10_20",
-    mean >= 20 & mean < 50 ~ "Group20_50",
-    mean >= 50 & mean < 100 ~ "Group50_100",
-    mean >= 100 & mean < 500 ~ "Group100_500",
-    mean >= 500 ~ "Group500"
-  )) %>% 
-  select(timestamp, trap, value, conc, type) %>% 
-  pivot_wider(names_from = conc, values_from = value) %>% 
-  select(-"NA")
-
-data_sampling_conc <- data_sampling %>% 
-  select(-type) %>%
-  pivot_longer(Castanea:Picea, names_to = "type", values_to = "value") %>% 
-  select(trap, timestamp, type, value) %>% 
-  pivot_wider(names_from = trap) %>% 
-  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
-  mutate(mean = if_else(!is.na(trap2) | !is.na(trap4) | !is.na(trap8),
-                          rowSums(.[3:5], na.rm = TRUE) / 3, 
-                          NA_real_)) %>% 
-  pivot_longer(trap2:trap8, names_to = "trap") %>% 
-  mutate(conc = case_when(
-    mean >= 10 & mean < 20 ~ "Group10_20",
-    mean >= 20 & mean < 50 ~ "Group20_50",
-    mean >= 50 & mean < 100 ~ "Group50_100",
-    mean >= 100 & mean < 500 ~ "Group100_500",
-    mean >= 500 ~ "Group500"
-  )) %>% 
-  select(timestamp, trap, value, conc, type) %>% 
-  pivot_wider(names_from = conc, values_from = value) %>% 
-  select(-"NA")
-
-gg_conc_dens <- list()
-gg_conc_hist <- list()
-
-labels_y <- list(0.065, 0.025, 0.015, 0.004, 0.0015)
-labels_y_hist <- list(13, 10, 10, 7.5, 3)
-names(labels_y) <- c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
-names(labels_y_hist) <- c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")
-
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
-  obs <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j))) %>% 
-    summarise(n()/3) %>% 
-    pull 
-  obs <- paste("# of Observations:", obs)
-  
-  gg_conc_dens[[j]] <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j)))  %>% 
-    ggplot() +
-    geom_density(aes(x = !!sym(j), col = trap, fill = trap), alpha = 0.15) + # The area under that whole curve should be 1. To get an estimate of the probability of certain values, you'd have to integrate over an interval on your 'y' axis, and that value should never be greater than 1.
-    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y[[j]])
-}
-
-ggarrange(plotlist = gg_conc_dens, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = "Comparison of Measurements of the Three Traps for all Species and Different Concentration Groups.",
-                  bottom = text_grob("We are looking at Density Kernel Estimators for all three traps to compare the measurements between them. \n The area under each curve adds up to 1 and makes it possible to vizualise the (dis-)similarities of measurements from the three traps. It is basically a smoothed histogram.", color = swatch()[1], face = "italic", size = 10))
-
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
-  obs <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j))) %>% 
-    summarise(n()/3) %>% 
-    pull 
-
-  obs <- paste("# of Observations:", obs)
-  
-  gg_conc_hist[[j]] <- data_sampling_conc_raw %>% 
-    filter(!is.na(!!sym(j)))  %>% 
-    ggplot() +
-    geom_histogram(data = subset(data_sampling_conc_raw, trap == "trap4"), aes(x = !!sym(j)), col = swatch()[3], fill = swatch()[3], alpha = 0.06, bins = 20) + 
-    geom_histogram(data = subset(data_sampling_conc_raw, trap == "trap8"), aes(x = !!sym(j)), col = swatch()[4], fill = swatch()[4], alpha = 0.06, bins = 20) + 
-    geom_histogram(data = subset(data_sampling_conc_raw, trap == "trap2"), aes(x = !!sym(j)), col = swatch()[2], fill = swatch()[2], alpha = 0.06, bins = 20)  + 
-    geom_label(label = obs, aes(x = max(!!sym(j)) * 0.8), y = labels_y_hist[[j]])
-}
-
-ggarrange(plotlist = gg_conc_hist, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = "Comparison of Measurements of the Three Traps for all Pollen-Species and Different Concentration Groups.",
-                  bottom = text_grob("We are looking at Counts for all three traps to compare the measurements between them. Trap2 in blue, Trap4 in grey, Trap8 in red.", color = swatch()[1], face = "italic", size = 10))
-
-
-```
-
-
-```{r fig.height=6, eval = FALSE}
+```{r eval = FALSE}
 # set.seed(123)
 
 ggthemr("fresh")
@@ -1515,7 +2048,7 @@ ggthemr("fresh")
 gg_hist_conc <- list()
 samples_conc <- list()
 
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
   samples_conc[[j]] <- plot_hist_dt(data_sampling_conc, j, n_test = 1, samples = 10)
   gg_hist_conc[[j]] <- plot_hist_dt(data_sampling_conc, j, n_test = 1, samples = 10, plots = TRUE)
 }
@@ -1525,7 +2058,7 @@ ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>%
                   bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red) and a Student-t distribution (black). \n In the left box we see the bootstrapped P-value for the two goodness-of-fit tests. In the right box we see the sd and degrees of freedom of the fitted t-Distribution.", color = swatch()[1], face = "italic", size = 10))
 ```
 
-```{r fig.height=9, eval = FALSE}
+```{r eval = FALSE}
 
 # The sampled errors from above are differences of each trap from the common mean (logarithmic).
 # To evaluate the robustness of our metrics we should therefore convert them back into absolute differences from the common mean in Pollen per m^3.
@@ -1533,7 +2066,7 @@ ggthemr("fresh")
 gg_spi_conc <- list()
 
 
-for (j in c("Group10_20", "Group20_50", "Group50_100", "Group100_500", "Group500")){
+for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
  gg_spi_conc[[j]] <- plot_spi(data_sampling_conc_raw, j, samples = samples_conc, n = 10, xlim = c(0, 3.5e4))
 }
 
@@ -1570,12 +2103,719 @@ Assumption of linearity is harder to achieve without adding much benefit (Wilcox
 Geometric mean regression, reduced major axis regression take into account that both y and x contain measurement errors. If measurements have been made on a continuous scale, the main choice is between the Altman–Bland method of differences and least products regression analysis. It is argued that although the former is relatively simple to execute, it does not distinguish adequately between fixed and proportional bias. Least products regression analysis, although more difficult to execute, does achieve this goal. There is almost universal agreement among bio-statisticians that the Pearson product–moment correlation coefficient (r) is valueless as a test for bias.
 http://www.jerrydallal.com/LHSP/compare.htm
 
-# Export Plots for Paper
+# Plots for Paper
+
+## Contrasts
+
+### Single Species
 
 ```{r}
+
+fit_anova_contr <- list()
+hsd_contr <- list()
+hsd_per_res <- list()
+npar_contr <- list()
+npar_contr_res <- list()
+npar_contr_overall <- list()
+kruskal_contr <- list()
+# 
+# data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
+# names(data_aggs) <- c("data_hours2", "data_hours3", "data_hours6", "data_hours12", "data_daily")
+# 
+# data_anova_contr <- map(data_aggs, ~map(.x, ~.x %>%
+#   mutate(timestamp = ymd_hm(paste0(date, hour)))))
+# 
+# data_contr <- map(data_anova_contr, ~.x %>% 
+#   bind_rows() %>% 
+#   mutate(trap = as.factor(trap)) %>% 
+#   group_by(trap, timestamp) %>% 
+#   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
+#   ungroup)
+# 
+# data_contr_tf <- map(data_contr, ~.x %>% 
+#   mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~log(. + 1)))
+
+species_contr <- c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")
+
+# Parametric
+
+for (i in species_contr){
+  fit_anova_contr[[i]] <- map(data_contr_tf, ~aov(as.formula(paste(i, "~ trap")), data = .x, contrasts = c("contr.sum", "contr.poly")))  
+  hsd_contr[[i]] <- map(fit_anova_contr[[i]], ~TukeyHSD(.x))
+  hsd_per_res[[i]] <- map(hsd_contr[[i]], ~.x[["trap"]])
+  
+  npar_contr[[i]] <- map(data_contr_tf, ~nparcomp::nparcomp(as.formula(paste(i, "~ trap")), data = .x, conf.level = 0.95, alternative = "two.sided", type = "Tukey"))
+  npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
+  npar_contr_overall[[i]] <- map(npar_contr[[i]], ~.x[["Overall"]])
+
+}
+
+number_obs_contr <- map(data_contr_tf, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
+
+species_contr_sel <- "Fraxinus"
+title_contr <- paste(species_contr_sel, "Pollen Concentrations")
+header_contr <- c(title_contr = 5)
+names(header_contr) <- title_contr
+
+hsd_per_res %>% 
+  extract2(species_contr_sel) %>% # Specify Resolution Here
+  map( ~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(res = rep(names(data_aggs), each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 5)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj") %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[species_contr_sel]])) %>% 
+  add_header_above(header_contr)
+
+
+npar_contr_res %>%
+  extract2(species_contr_sel) %>% # Specify Resolution Here
+  bind_rows() %>%
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(res = rep(names(data_aggs), each = 3)) %>%
+  select(Traps = Comparison, Estimator, Lower, Upper, "p-Value" = "p.Value") %>%
+  kable() %>%
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[species_contr_sel]])) %>% 
+  add_header_above(header_contr)
+
+```
+
+### Top-5 Species - Anova
+
+```{r}
+two_hour_contr <- map(hsd_per_res, ~.x %>% extract(c(1))) 
+daily_contr <- map(hsd_per_res, ~.x %>% extract(c(5))) 
+
+two_hour_table <- two_hour_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
+
+daily_table <- daily_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
+
+two_hour_table %>% 
+  mutate(`p-Value` = if_else(`p-Value` < 0.05, 
+                             cell_spec(`p-Value`, color = "red"),
+                             cell_spec(`p-Value`))) %>% 
+  bind_cols(daily_table) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         species = cell_spec(species, angle = 270, align =  "center")) %>% 
+  select(species, everything()) %>% 
+  setNames(c("Species", names(two_hour_table), names(two_hour_table %>% select(-Traps)))) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 3, indent =  FALSE) %>% 
+  pack_rows(start_row = 4, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 9, indent =  FALSE) %>% 
+  pack_rows(start_row = 10, end_row = 12, indent =  FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
+  pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
+
+  
+```
+
+```{r}
+<<<<<<< HEAD
 ggsave("figure_missmap.png", gg_missmap)
 kable_number_traps, "table_number_traps.png")
 
 
+=======
+
+two_hour_anova <- map(fit_anova_contr, ~.x %>% extract(c(1))) 
+daily_anova <- map(fit_anova_contr, ~.x %>% extract(c(5))) 
+
+two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>% 
+  summary %>% 
+  bind_cols() %>% 
+  as_tibble %>% 
+  bind_cols(name = c("Trap", "Residuals")) %>% 
+  select(name, Df, `Sum Sq`, `Pr(>F)`) %>% 
+  mutate(`Sum Sq` = round(`Sum Sq`),
+         `Pr(>F)` = scales::percent(signif(`Pr(>F)`, 3), accuracy = 0.01),
+         lead_sq = lead(`Sum Sq`, 1),
+         PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
+  bind_rows
+
+
+daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>% 
+  summary %>% 
+  bind_cols() %>% 
+  as_tibble %>% 
+  bind_cols(name = c("Trap", "Residuals")) %>% 
+  select(name, Df, `Sum Sq`, `Pr(>F)`) %>% 
+  mutate(`Sum Sq` = round(`Sum Sq`),
+         `Pr(>F)` = scales::percent(signif(`Pr(>F)`, 3), accuracy = 0.01),
+         lead_sq = lead(`Sum Sq`, 1),
+         PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
+  bind_rows
+
+options(knitr.kable.NA = '')
+
+two_hour_table_anova %>% 
+  bind_cols(daily_table_anova) %>% 
+  mutate(Species = rep(species_contr, each = 2)) %>% 
+  select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
+  setNames(c("Species", "Factor", "Df", "Sum Sq", "Pr(>F)", "PES", "Df", "Sum Sq", "Pr(>F)", "PES")) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 2, indent =  FALSE) %>% 
+  pack_rows(start_row = 3, end_row = 4, indent =  FALSE) %>% 
+  pack_rows(start_row = 5, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 8, indent =  FALSE) %>% 
+  pack_rows(start_row = 9, end_row = 10, indent =  FALSE) %>% 
+  pack_rows(start_row = 11, end_row = 12, indent =  FALSE)  
+
+
 ```
+
+
+### Top-5 Species - Robust
+
+```{r}
+two_hour_contr <- map(npar_contr_res, ~.x %>% extract(c(1))) 
+daily_contr <- map(npar_contr_res, ~.x %>% extract(c(5))) 
+
+two_hour_table <- two_hour_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(species = rep(species_contr, each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Traps = traps, Estimator, Lower, Upper, "p-Value" = "p.Value")
+
+daily_table <- daily_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(species = rep(species_contr, each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Estimator, Lower, Upper, "p-Value" = "p.Value")
+
+two_hour_table %>% 
+  mutate(`p-Value` = if_else(`p-Value` < 0.05,
+                             cell_spec(`p-Value`, color = "red"),
+                             cell_spec(`p-Value`))) %>%
+  bind_cols(daily_table) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         species = cell_spec(species, angle = 270, align =  "center")) %>% 
+  select(species, everything()) %>% 
+  setNames(c("Species", names(two_hour_table), names(two_hour_table %>% select(-Traps)))) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 3, indent =  FALSE) %>% 
+  pack_rows(start_row = 4, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 9, indent =  FALSE) %>% 
+  pack_rows(start_row = 10, end_row = 12, indent =  FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
+  pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
+
+  
+```
+
+```{r}
+two_hour_contr <- map(npar_contr_overall, ~.x %>% extract(c(1)))
+daily_contr <- map(npar_contr_overall, ~.x %>% extract(c(5)))
+
+two_hour_table <- two_hour_contr %>%
+  unlist(recursive = FALSE) %>%
+  bind_rows() %>%
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(Species = species_contr)
+
+daily_table <- daily_contr %>%
+  unlist(recursive = FALSE) %>%
+  bind_rows() %>%
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(Species = species_contr)
+
+two_hour_table %>%
+  bind_cols(daily_table) %>%
+  select(Species, Quantile, p.Value, Quantile1, p.Value1) %>%
+  setNames(c("Species", "Quantile", "p.Value", "Quantile", "p.Value")) %>%
+  kable(escape = FALSE, align = c("c",  rep("r", 8))) %>%
+  kable_styling("striped", full_width = FALSE) %>%
+  add_header_above(c(" " = 1, "Two-Hour Averages" = 2, "Daily Averages" = 2)) %>%
+  column_spec(1, border_right = TRUE) %>%
+  column_spec(3, border_right = TRUE) %>%
+  collapse_rows(columns = 1)
+>>>>>>> 77a40a232a6736859e3f940432b6a570bc87af77
+```
+
+
+### Pollen Size Group
+
+```{r}
+
+fit_anova_contr <- list()
+hsd_contr <- list()
+hsd_per_res <- list()
+npar_contr <- list()
+npar_contr_res <- list()
+npar_contr_overall <- list()
+
+# Group1 <- c("Urtica", "Castanea")
+# Group2 <- c("Alnus", "Betula", "Corylus", "Fraxinus", "Platanus", "Rumex", "Salix")
+# Group3 <- c("Plantago", "Poaceae", "Populus", "Taxus", "Cupressus", "Ulmus")
+# Group4 <- c("Carpinus", "Fagus", "Juglans", "Quercus")
+# Group5 <- c("Pinus", "Picea")
+
+species_contr <- c("Total", "Group1", "Group2", "Group3", "Group4", "Group5")
+
+# Parametric
+
+for (i in species_contr){
+  fit_anova_contr[[i]] <- map(data_contr_tf, ~aov(as.formula(paste(i, "~ trap")), data = .x, contrasts = c("contr.sum", "contr.poly")))  
+  hsd_contr[[i]] <- map(fit_anova_contr[[i]], ~TukeyHSD(.x))
+  hsd_per_res[[i]] <- map(hsd_contr[[i]], ~.x[["trap"]])
+  
+  npar_contr[[i]] <- map(data_contr_tf, ~nparcomp::nparcomp(as.formula(paste(i, "~ trap")), data = .x, conf.level = 0.95, alternative = "two.sided", type = "Tukey"))
+  npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
+  npar_contr_overall[[i]] <- map(npar_contr[[i]], ~.x[["Overall"]])
+}
+
+number_obs_contr <- map(data_contr_tf, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
+
+species_contr_sel <- "Group1" # Specify Resolution Here
+title_contr <- paste(species_contr_sel, "Pollen Concentrations")
+header_contr <- c(title_contr = 5)
+names(header_contr) <- title_contr
+
+hsd_per_res %>% 
+  extract2(species_contr_sel) %>% 
+  map( ~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(res = rep(names(data_aggs), each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 5)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj") %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[species_contr_sel]])) %>% 
+  add_header_above(header_contr)
+
+
+npar_contr_res %>%
+  extract2(species_contr_sel) %>% # Specify Resolution Here
+  bind_rows() %>%
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(res = rep(names(data_aggs), each = 3)) %>%
+  select(Traps = Comparison, Estimator, Lower, Upper, "p-Value" = "p.Value") %>%
+  kable() %>%
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[species_contr_sel]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[species_contr_sel]])) %>% 
+  add_header_above(header_contr)
+
+```
+
+### Pollen Size Group - Anova
+
+```{r}
+two_hour_contr <- map(hsd_per_res, ~.x %>% extract(c(1))) 
+daily_contr <- map(hsd_per_res, ~.x %>% extract(c(5))) 
+
+two_hour_table <- two_hour_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
+
+daily_table <- daily_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
+
+two_hour_table %>% 
+  mutate(`p-Value` = if_else(`p-Value` < 0.05, 
+                             cell_spec(`p-Value`, color = "red"),
+                             cell_spec(`p-Value`))) %>% 
+  bind_cols(daily_table) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         species = cell_spec(species, angle = 270, align =  "center")) %>% 
+  select(species, everything()) %>% 
+  setNames(c("Species", names(two_hour_table), names(two_hour_table %>% select(-Traps)))) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 3, indent =  FALSE) %>% 
+  pack_rows(start_row = 4, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 9, indent =  FALSE) %>% 
+  pack_rows(start_row = 10, end_row = 12, indent =  FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
+  pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
+
+  
+```
+
+
+```{r}
+
+two_hour_anova <- map(fit_anova_contr, ~.x %>% extract(c(1))) 
+daily_anova <- map(fit_anova_contr, ~.x %>% extract(c(5))) 
+
+two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>% 
+  summary %>% 
+  bind_cols() %>% 
+  as_tibble %>% 
+  bind_cols(name = c("Trap", "Residuals")) %>% 
+  select(name, Df, `Sum Sq`, `Pr(>F)`) %>% 
+  mutate(`Sum Sq` = round(`Sum Sq`),
+         `Pr(>F)` = scales::percent(signif(`Pr(>F)`, 3), accuracy = 0.01),
+         lead_sq = lead(`Sum Sq`, 1),
+         PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
+  bind_rows
+
+
+daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>% 
+  summary %>% 
+  bind_cols() %>% 
+  as_tibble %>% 
+  bind_cols(name = c("Trap", "Residuals")) %>% 
+  select(name, Df, `Sum Sq`, `Pr(>F)`) %>% 
+  mutate(`Sum Sq` = round(`Sum Sq`),
+         `Pr(>F)` = scales::percent(signif(`Pr(>F)`, 3), accuracy = 0.01),
+         lead_sq = lead(`Sum Sq`, 1),
+         PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
+  bind_rows
+
+options(knitr.kable.NA = '')
+
+two_hour_table_anova %>% 
+  bind_cols(daily_table_anova) %>% 
+  mutate(Species = rep(species_contr, each = 2)) %>% 
+  select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
+  setNames(c("Species", "Factor", "Df", "Sum Sq", "Pr(>F)", "PES", "Df", "Sum Sq", "Pr(>F)", "PES")) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 2, indent =  FALSE) %>% 
+  pack_rows(start_row = 3, end_row = 4, indent =  FALSE) %>% 
+  pack_rows(start_row = 5, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 8, indent =  FALSE) %>% 
+  pack_rows(start_row = 9, end_row = 10, indent =  FALSE) %>% 
+  pack_rows(start_row = 11, end_row = 12, indent =  FALSE)  
+
+
+```
+
+### Pollen Size Group - Robust
+
+```{r}
+two_hour_contr <- map(npar_contr_res, ~.x %>% extract(c(1))) 
+daily_contr <- map(npar_contr_res, ~.x %>% extract(c(5))) 
+
+two_hour_table <- two_hour_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(species = rep(species_contr, each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Traps = traps, Estimator, Lower, Upper, "p-Value" = "p.Value")
+
+daily_table <- daily_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_if(is.numeric, round, 3) %>%
+  mutate(species = rep(species_contr, each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Estimator, Lower, Upper, "p-Value" = "p.Value")
+
+two_hour_table %>% 
+  mutate(`p-Value` = if_else(`p-Value` < 0.05,
+                             cell_spec(`p-Value`, color = "red"),
+                             cell_spec(`p-Value`))) %>%
+  bind_cols(daily_table) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         species = cell_spec(species, angle = 270, align =  "center")) %>% 
+  select(species, everything()) %>% 
+  setNames(c("Species", names(two_hour_table), names(two_hour_table %>% select(-Traps)))) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 3, indent =  FALSE) %>% 
+  pack_rows(start_row = 4, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 9, indent =  FALSE) %>% 
+  pack_rows(start_row = 10, end_row = 12, indent =  FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
+  pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
+
+  
+```
+
+
+### Single Concentration Group
+
+```{r}
+
+fit_anova_contr <- list()
+hsd_contr <- list()
+hsd_per_res <- list()
+npar_contr <- list()
+npar_contr_res <- list()
+
+data_contr_conc <- map(data_contr_tf, ~.x %>% 
+  select(-Total:-Group5) %>% 
+  pivot_longer(Castanea:Picea) %>% 
+  pivot_wider(names_from = trap) %>% 
+  setNames(c("timestamp", "type", "trap2", "trap4", "trap8")) %>% 
+  mutate(mean = (trap2 + trap4 + trap8)/3) %>% 
+  filter(!is.na(mean)) %>% 
+  pivot_longer(trap2:trap8, names_to = "trap") %>% 
+  mutate(conc = case_when(
+    mean >= log(0) & mean < log(10) ~ "Group0_10",
+    mean >= log(10) & mean < log(20) ~ "Group10_20",
+    mean >= log(20) & mean < log(50) ~ "Group20_50",
+    mean >= log(50) & mean < log(100) ~ "Group50_100",
+    mean >= log(100) & mean < log(300) ~ "Group100_300",
+    mean >= log(300) ~ "Group300"
+  )) %>% 
+  select(timestamp, trap, value, conc, type) %>% 
+  pivot_wider(names_from = conc, values_from = value))
+
+
+species_contr <- c("Group0_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
+
+# Parametric
+
+for (i in species_contr){
+  fit_anova_contr[[i]] <- map(data_contr_conc, ~aov(as.formula(paste(i, "~ trap")), data = .x, contrasts = c("contr.sum", "contr.poly")))  
+  hsd_contr[[i]] <- map(fit_anova_contr[[i]], ~TukeyHSD(.x))
+  hsd_per_res[[i]] <- map(hsd_contr[[i]], ~.x[["trap"]])
+  # 
+  # npar_contr[[i]] <- map(data_contr_conc, ~nparcomp::nparcomp(as.formula(paste(i, "~ trap")), data = .x  %>% filter(!is.na(!!sym(i))), conf.level = 0.95, alternative = "two.sided", type = "Tukey"))  
+  # npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
+}
+
+# There is an unsolved error in the nparcomp source-code: https://stackoverflow.com/questions/24047659/dataset-limitation-in-r-package-nparcomp
+
+number_obs_contr <- map(data_contr_conc, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
+min_group <- 0
+max_group <- 10
+conc_group <- paste0("Group", min_group, "_", max_group)
+title_contr <- paste0("Concentration Group from ", min_group, " (", round(log(min_group), 2), ") to ", max_group, " (", round(log(max_group), 2), ")")
+header_contr <- c(title_contr = 5)
+names(header_contr) <- title_contr
+
+hsd_per_res %>% 
+  extract2(conc_group) %>% # Specify Resolution Here
+  map( ~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(res = rep(names(data_aggs), each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 5)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj") %>% 
+  kable() %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+    pack_rows(start_row = 1, end_row = 3, group_label = paste("2-Hour Averages, Observations:", number_obs_contr$data_hours2[[conc_group]])) %>% 
+    pack_rows(start_row = 4, end_row = 6, group_label = paste("3-Hour Averages, Observations:", number_obs_contr$data_hours3[[conc_group]])) %>% 
+    pack_rows(start_row = 7, end_row = 9, group_label = paste("6-Hour Averages, Observations:", number_obs_contr$data_hours6[[conc_group]])) %>% 
+    pack_rows(start_row = 10, end_row = 12, group_label = paste("12-Hour Averages, Observations:", number_obs_contr$data_hours12[[conc_group]])) %>% 
+    pack_rows(start_row = 13, end_row = 15, group_label = paste("Daily Averages, Observations:", number_obs_contr$data_daily[[conc_group]])) %>% 
+  add_header_above(header = header_contr)
+
+
+# npar_contr_res %>% 
+#   extract2("Total") %>% # Specify Resolution Here
+#   bind_rows() %>% 
+#   mutate_if(is.numeric, round, 3) %>% 
+#   mutate(res = rep(names(data_aggs), each = 3)) %>% 
+#   select(Traps = Comparison, Estimator, Lower, Upper, "p-Value" = "p.Value") %>% 
+#   kable() %>% 
+#   kable_styling("striped", full_width = FALSE) %>% 
+#     pack_rows(start_row = 1, end_row = 3, group_label = "2-Hour Averages") %>% 
+#     pack_rows(start_row = 4, end_row = 6, group_label = "3-Hour Averages") %>% 
+#     pack_rows(start_row = 7, end_row = 9, group_label = "6-Hour Averages") %>% 
+#     pack_rows(start_row = 10, end_row = 12, group_label = "12-Hour Averages") %>% 
+#     pack_rows(start_row = 13, end_row = 15, group_label = "Daily Averages")
+
+```
+
+### Concentration Groups - Anova
+
+```{r}
+two_hour_contr <- map(hsd_per_res, ~.x %>% extract(c(1)))
+daily_contr <- map(hsd_per_res, ~.x %>% extract(c(5)))
+
+two_hour_table <- two_hour_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select(Traps = traps, "Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
+
+daily_table <- daily_contr %>% 
+  unlist(recursive = FALSE) %>% 
+  map(~ .x %>% as_tibble) %>% 
+  bind_rows() %>% 
+  mutate_all(~round(., 3)) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
+  select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
+
+two_hour_table %>% 
+  bind_cols(daily_table) %>% 
+  mutate(species = rep(species_contr, each = 3),
+         species = cell_spec(species, angle = 270, align =  "center")) %>% 
+  select(species, everything()) %>% 
+  mutate(`p-Value` = if_else(`p-Value` < 0.05, 
+                             cell_spec(`p-Value`, color = "red"),
+                             cell_spec(`p-Value`)),
+         `p-Value1` = if_else(`p-Value1` < 0.05, 
+                             cell_spec(`p-Value1`, color = "red"),
+                             cell_spec(`p-Value1`))) %>% 
+  setNames(c("Species", names(two_hour_table), names(two_hour_table %>% select(-Traps)))) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 3, indent =  FALSE) %>% 
+  pack_rows(start_row = 4, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 9, indent =  FALSE) %>% 
+  pack_rows(start_row = 10, end_row = 12, indent =  FALSE) %>% 
+  pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
+  pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
+
+  
+```
+
+```{r}
+
+two_hour_anova <- map(fit_anova_contr, ~.x %>% extract(c(1))) 
+daily_anova <- map(fit_anova_contr, ~.x %>% extract(c(5))) 
+
+two_hour_table_anova <- map(two_hour_anova %>% unlist(recursive = FALSE), ~.x %>% 
+  summary %>% 
+  bind_cols() %>% 
+  as_tibble %>% 
+  bind_cols(name = c("Trap", "Residuals")) %>% 
+  select(name, Df, `Sum Sq`, `Pr(>F)`) %>% 
+  mutate(`Sum Sq` = round(`Sum Sq`),
+         `Pr(>F)` = scales::percent(signif(`Pr(>F)`, 3), accuracy = 0.01),
+         lead_sq = lead(`Sum Sq`, 1),
+         PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
+  bind_rows
+
+
+daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>% 
+  summary %>% 
+  bind_cols() %>% 
+  as_tibble %>% 
+  bind_cols(name = c("Trap", "Residuals")) %>% 
+  select(name, Df, `Sum Sq`, `Pr(>F)`) %>% 
+  mutate(`Sum Sq` = round(`Sum Sq`),
+         `Pr(>F)` = scales::percent(signif(`Pr(>F)`, 3), accuracy = 0.01),
+         lead_sq = lead(`Sum Sq`, 1),
+         PES = scales::percent(signif(`Sum Sq` / (`Sum Sq` + lead_sq), 3), accuracy = 0.01))) %>% 
+  bind_rows
+
+options(knitr.kable.NA = '')
+
+two_hour_table_anova %>% 
+  bind_cols(daily_table_anova) %>% 
+  mutate(Species = rep(species_contr, each = 2)) %>% 
+  select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
+  setNames(c("Species", "Factor", "Df", "Sum Sq", "Pr(>F)", "PES", "Df", "Sum Sq", "Pr(>F)", "PES")) %>% 
+  kable(escape = FALSE, align = c("c", "l", rep("r", 8))) %>% 
+  kable_styling("striped", full_width = FALSE) %>% 
+  add_header_above(c(" " = 2, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
+  column_spec(2, border_right = TRUE) %>% 
+  column_spec(6, border_right = TRUE) %>% 
+  collapse_rows(columns = 1) %>%
+  pack_rows(start_row = 1, end_row = 2, indent =  FALSE) %>% 
+  pack_rows(start_row = 3, end_row = 4, indent =  FALSE) %>% 
+  pack_rows(start_row = 5, end_row = 6, indent =  FALSE) %>% 
+  pack_rows(start_row = 7, end_row = 8, indent =  FALSE) %>% 
+  pack_rows(start_row = 9, end_row = 10, indent =  FALSE) %>% 
+  pack_rows(start_row = 11, end_row = 12, indent =  FALSE)  
+
+
+```
+
+
+
+## Exports
+
+```{r eval = FALSE}
+
+# The Sysadmin does not allow to save kabel as png (need phantomjs), hence the tables were saved manually.
+# The GG-Plots are being saved right here:
+
+#### PER SPECIES AND TEMPORAL AVERAGE
+ggsave("figure1_timeseries_boxplot_hist.png", gg_comparison, width = 10, height = 7, dpi = 300)
+ggsave("figure2_timeseries.png", gg_timeseries, width = 10, height = 7, dpi = 300)
+ggsave("figure3_correlation.png", gg_corr, width = 10, height = 7, dpi = 300)
+ggsave("figure4_altman_bland.png", gg_ab, width = 10, height = 7, dpi = 300)
+ggsave("figure9_pairwise_contrasts.png", gg_contrasts, width = 10, height = 7, dpi = 300)
+
+#### PER TEMPORAL AVERAGE
+ggsave("figure5_error_hist_species.png", gg_error_species, width = 10, height = 7, dpi = 300)
+ggsave("figure6_error_hist_size.png", gg_error_size, width = 10, height = 7, dpi = 300)
+ggsave("figure7_error_hist_conc.png", gg_error_conc, width = 10, height = 7, dpi = 300)
+ggsave("figure8_measurement_differences_conc_groups.png", gg_dens_conc, width = 10, height = 7, dpi = 300)
+```
+
+
 
