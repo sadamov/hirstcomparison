@@ -259,6 +259,7 @@ data <- measurements_after_exclusion %>%
 
 ```{r eval = FALSE}
 data[[1]] %>%  as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, col = swatch()[c(4,2)], main = "Missingness Map for Trap 2 - Line 2 after data Preparation")
+
 ```
 
 
