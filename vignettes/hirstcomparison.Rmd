@@ -19,7 +19,7 @@ output:
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
 species <- "Total"
-resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -773,10 +773,10 @@ sd_2hour_ind %>%
 maximum_raw_hours2 <- data_hours2%>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~max(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -787,10 +787,10 @@ maximum_raw_hours2 <- data_hours2%>%
 average_raw_hours2 <- data_hours2 %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -801,10 +801,10 @@ average_raw_hours2 <- data_hours2 %>%
 maximum_raw_daily <- data_daily %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~max(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~max(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -815,10 +815,10 @@ maximum_raw_daily <- data_daily %>%
 average_raw_daily <- data_daily %>% 
   bind_rows %>% 
   group_by(date, trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup() %>% 
   group_by(trap) %>% 
-  summarise_at(vars(all_of(species_selection)), ~mean(., na.rm = TRUE)) %>% 
+  summarise_at(vars(all_of(species_selection), Total), ~mean(., na.rm = TRUE)) %>% 
   ungroup()%>% 
   data.table::transpose() %>% 
   setNames(paste0("trap", c(2, 4, 8))) %>% 
@@ -837,7 +837,7 @@ sd_tb_daily <- map(sd_list_daily, ~.x %>%
          mean = mean(value),
          cv = sd/mean) %>% 
   filter(trap == "trap2",
-         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+         name %in% c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
   select(name, sd, mean, se, cv, mean)) %>% 
   bind_rows %>% 
   ungroup
@@ -850,7 +850,7 @@ sd_tb_hours2 <- map(sd_list_hours2, ~.x %>%
          mean = mean(value),
          cv = sd/mean) %>% 
   filter(trap == "trap2",
-         name %in% c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
+         name %in% c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")) %>% 
   select(name, sd, mean, se, cv, mean)) %>% 
   bind_rows %>% 
   ungroup
@@ -948,6 +948,9 @@ gg_comparison
 
 
 ```
+
+
+
 
 
 # Statistical Comparison
@@ -1858,6 +1861,66 @@ gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>%
   annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
 ```
 
+```{r fig.height=7, fig.width=10}
+
+data_conc_diff <- data_errors_conc_raw %>% 
+  filter(type == "Poaceae") %>% # Feel free to filter by species
+  pivot_longer(4:9, names_to = "group", values_to = "value") %>% 
+  pivot_wider(names_from =trap) %>% 
+  mutate(diff24 = abs((trap2-trap4) / ((trap2+trap4)/2)),
+         diff28 = abs((trap2-trap8) / ((trap2+trap8)/2)),
+         diff48 = abs((trap4-trap8) / ((trap4+trap8)/2))) %>% 
+  ungroup 
+
+means <- data_conc_diff %>% 
+  pivot_longer(diff24:diff48, names_to = "Traps") %>% 
+  mutate(Traps = factor(Traps, labels = c("2 - 4", "2 - 8", "4 - 8"))) %>%
+  group_by(group, Traps) %>% 
+  summarise(mean = mean(value, na.rm = TRUE))
+
+data_conc_diff %>% 
+  pivot_longer(diff24:diff48, names_to = "Traps") %>% 
+  mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")),
+         Traps = factor(Traps, labels = c("2 - 4", "2 - 8", "4 - 8"))) %>% 
+  ggplot(aes(x = group, y = value, fill = Traps)) +
+  geom_boxplot(alpha = 0.6) +
+  geom_point(data = means, aes(x = group, y = mean, col = Traps), position = position_dodge(width = 0.75), shape = 95, size = 10, show.legend = FALSE) +
+  labs(x = "", y = "abs(trapᵢ - trapⱼ) / mean(trapᵢ, trapⱼ)", title = "Relative Pairwise Differences for Daily Average Concentrations") +
+  scale_y_continuous(labels = scales::percent)
+
+# data_conc_plot <- data_conc_diff %>% 
+#   group_by(group) %>% # Select group or type here
+#   summarise(meandiff24 = mean(diff24, na.rm = TRUE),
+#             meandiff28 = mean(diff28, na.rm = TRUE),
+#             meandiff48 = mean(diff48, na.rm = TRUE),
+#             sddiff24 = sd(diff24, na.rm = TRUE),
+#             sddiff28 = sd(diff28, na.rm = TRUE),
+#             sddiff48 = sd(diff48, na.rm = TRUE)) %>% 
+#   mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300"))) %>% 
+#   ungroup %>% 
+#   arrange(group)
+# 
+# data_conc_plot %>% 
+#   pivot_longer(meandiff24:meandiff48, names_to = "traps") %>% 
+#   mutate(traps = rep(c("24", "28", "48"), 6)) %>% 
+#   select(group, traps, mean = value) %>% 
+#   bind_cols(
+#     data_conc_plot %>% 
+#       pivot_longer(sddiff24:sddiff48, names_to = "names", values_to = "sd") %>% 
+#       select(sd)
+#   ) %>%
+#   mutate(lower = if_else(mean - 1.96 * sd >= 0, mean - 1.96 * sd, NA_real_),
+#          upper = mean + 1.96 * sd) %>% 
+#   select(-sd) %>% 
+#   pivot_longer(mean:upper, names_to = "type", values_to = "values") %>% 
+#   mutate(type = factor(type, levels = c("upper", "mean", "lower"), labels = c("+ 1.96 SD", "Mean", "- 1.96 SD"))) %>% 
+#   ggplot(aes(x = group, y = values, col = traps, fill = traps, shape = type)) +
+#   geom_point() +
+#   scale_shape_manual(values = c(24, 3, 25)) +
+#   labs(x = "", y = "Mean Differences", title = "Relative Pairwise Differences from Common Mean")
+  
+```
+
 ### Species
 
 ```{r fig.height=7, fig.width=10}
@@ -1872,6 +1935,7 @@ for (j in c("Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus", "Cupressus")){
 gg_error_species <- ggarrange(plotlist = gg_hist_species, nrow = 3, ncol = 2) %>% 
   annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Top-6 Species"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
 ```
+
 
 
 ### Pollen Grain Size Groups
