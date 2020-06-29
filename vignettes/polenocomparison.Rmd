@@ -5,10 +5,10 @@ author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 always_allow_html: TRUE
 output:
-  word_document: default
-  pdf_document: default
   html_document:
     df_print: paged
+  pdf_document: default
+  word_document: default
 ---
 
 # Setup
@@ -22,6 +22,9 @@ species <- "total" # Total is the only option currently, as poleno classifier is
 resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst") 
 if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
+
+devtools::install_version("caTools", version = "1.17.1.1")
+renv::paths$library()
 
 ```
 
@@ -409,7 +412,6 @@ data_hours12_pol <- map(data_poleno_red, ~.x %>%
 
 ```
 
-
 Let's see whether padding is necessary or whether we have values for all timestamps.
 We would expect to have a total of 56 days with Poleno measurements that are not affected by calibration.
 Hence we want to see the respective number of measurements for the various averages.
@@ -573,7 +575,7 @@ data_poleno <- map2(data_raw_poleno, c(2, 4, 5), ~.x %>%
          date = date(timestamp),
          hour = hour(timestamp) + 1,
          trap = paste0("poleno", .y)) %>% 
-  filter(timestamp > ymd_hms("2020-03-01 00:00:00"),
+  filter(timestamp > ymd_hms("2020-03-03 00:00:00"),
          timestamp <= ymd_hms("2020-05-08 00:00:00")))
 
 }
@@ -597,7 +599,7 @@ ggthemr("fresh")
 The Poleno-traps allow to investigate different time-averages very easily. For the Hirst traps we only get 1hour, 3hour and daily averages from the DWH. The 3hour avg were excluded from this analysis because the observations don't appear to be iid (they are calcuated every hour) and the hirst traps were already compared ingreat detail in the hirstcomparison vignette. In the following we investigate the three poleno traps.
 
 
-# Tabular Comparison
+# ++ Tabular Comparison
 
 ```{r}
 data_aggs_pol <- list(data_daily_comb %>% filter(trap != "hirst"), 
@@ -611,14 +613,15 @@ map(data_aggs_pol, ~.x %>%
            se = sd / 3,
            mean = mean(total, na.rm = TRUE),
            cv = sd/mean) %>% 
-    filter(timestamp == as.Date("2020-03-02"),
+    filter(timestamp == as.Date("2020-03-05"),
            trap == "poleno2") %>% 
     select(sd, mean, se, cv)) %>% 
   bind_rows %>% 
+  mutate_if(is.numeric, ~round(., 2)) %>% 
   mutate(Average = c("Daily", "12-Hours", "6-Hours", "3-Hours", "Hourly")) %>% 
   select(Average, everything()) %>% 
   kable %>% 
-  kable_styling("striped")
+  kable_styling("striped", full_width = FALSE)
 
 
 ```
@@ -1156,7 +1159,7 @@ summary(fit_rlmer)
 
 # Measurement Spread and Error Distribution
 
-## Histograms of Concentration Groups
+## ++ Histograms of Concentration Groups
 
 ```{r fig.height=7, fig.width=10}
 gg_hist_conc_pol <- list()
@@ -1180,7 +1183,7 @@ data_errors_pol <- data_hourly_comb %>%
 
 data_hourly_comb %>% summary
 
-conc_y_label <- c(2.8, 1.1, 0.75, 1, 1.2, 1.5)
+conc_y_label <- c(1.3, 1.4, 1.3, 1.6, 3, 3)
 names(conc_y_label) <- c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")
 
 for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300")){
@@ -1188,7 +1191,7 @@ for (j in c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_3
 }
 
 ggarrange(plotlist = gg_hist_conc_pol, nrow = 3, ncol = 2) %>% 
-  annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
+  annotate_figure(top = paste("Ratios of Individual Hourly Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
 
 ```
 
@@ -1356,7 +1359,7 @@ gg_error_conc
 
 ```
 
-# Auto-Correlation
+# ++ Auto-Correlation
 
 In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
 I will create a dataset with 5-Minute averages to have the shortest window available as possible.
@@ -1502,7 +1505,7 @@ ggplot(data = poleno_pacf_df, mapping = aes(x = lag, y = acf)) +
 ```{r fig.height=10, fig.width=10}
 
 ts_autocorr_tb <- data_hourly_comb %>% 
-  filter(trap == "poleno4") %>% 
+  filter(trap == "poleno2") %>% 
   select(timestamp, total) %>% 
   mutate(total = if_else(is.na(total), 0, total),
          total = log(total + 1)) %>% 
@@ -1565,7 +1568,7 @@ ciline <- qnorm((1 - conf_level) / 2) / sqrt(nrow(ts_autocorr_tb))
 poleno_acf_remainder <- acf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
 poleno_acf_df_remainder <- with(poleno_acf_remainder, data.frame(lag, acf)) %>% slice(-1)
 
-ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
+gg_acf <- ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
   geom_hline(aes(yintercept = 0)) +
   geom_segment(mapping = aes(xend = lag, yend = 0)) +
   geom_hline(aes(yintercept = ciline), linetype = 2) +
@@ -1587,18 +1590,57 @@ ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
 poleno_pacf_remainder <- pacf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
 poleno_pacf_df_remainder <- with(poleno_pacf_remainder, data.frame(lag, acf)) %>% slice(-1)
 
+gg_pacf <- ggplot(data = poleno_pacf_df_remainder, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) +
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+ggarrange(gg_acf, gg_pacf, nrow = 2)
+
+forecast::auto.arima(dcmp_components$remainder)
+forecast::auto.arima(ts_autocorr)
+
+# ts_autocorr %>% PACF(count_window) %>% autoplot()
+
+```
+
+Daily
+
+```{r}
+ts_autocorr_tb_daily <- data_daily_comb %>% 
+  filter(trap == "poleno4") %>% 
+  select(timestamp, total) %>% 
+  mutate(total = if_else(is.na(total), 0, total),
+         total = log(total + 1)) %>% 
+  rename(end_window = timestamp, count_window = total)
+
+ts_autocorr_daily <- as_tsibble(ts_autocorr_tb_daily, regular = TRUE, index = end_window)
+
+dcmp <- ts_autocorr_daily %>%
+  model(STL(count_window ~ season()))
+dcmp_components <- components(dcmp)
+dcmp_components %>% autoplot()
+
+poleno_acf_remainder <- acf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+poleno_acf_df_remainder <- with(poleno_acf_remainder, data.frame(lag, acf)) %>% slice(-1)
+
+ggplot(data = poleno_acf_df_remainder, mapping = aes(x = lag, y = acf)) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_segment(mapping = aes(xend = lag, yend = 0)) +
+  geom_hline(aes(yintercept = ciline), linetype = 2) +
+  geom_hline(aes(yintercept = -ciline), linetype = 2)
+
+poleno_pacf_remainder <- pacf(dcmp_components$remainder, plot = FALSE, lag.max = 60)
+poleno_pacf_df_remainder <- with(poleno_pacf_remainder, data.frame(lag, acf)) %>% slice(-1)
+
 ggplot(data = poleno_pacf_df_remainder, mapping = aes(x = lag, y = acf)) +
   geom_hline(aes(yintercept = 0)) +
   geom_segment(mapping = aes(xend = lag, yend = 0)) +
   geom_hline(aes(yintercept = ciline), linetype = 2) +
   geom_hline(aes(yintercept = -ciline), linetype = 2)
 
-# ts_autocorr %>% PACF(count_window) %>% autoplot()
-
 ```
-
-
-
 
 
 
