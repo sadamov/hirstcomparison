@@ -2,3 +2,14 @@
 *.R
 frage_regula.Rmd
 test.Rmd
+hirstcomparison.log
+hirstcomparison_files
+*.tmp
+*.csv
+*.xlsx
+hirstcomparison_cache
+polenocomparison_cache
+figures_tables
+*.Rdata
+*.png
+lib154192b9d3cb1

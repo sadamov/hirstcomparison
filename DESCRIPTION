@@ -1,18 +1,41 @@
 Package: hirstcomparison
-Title: What the Package Does (One Line, Title Case)
-Version: 0.0.0.9000
+Title: A Scientific Analysis and Comparison of Pollen Traps
+Version: 0.1.0
 Authors@R: 
-    person(given = "First",
-           family = "Last",
+    person(given = "Simon",
+           family = "Adamov",
            role = c("aut", "cre"),
-           email = "first.last@example.com",
-           comment = c(ORCID = "YOUR-ORCID-ID"))
-Description: What the package does (one paragraph).
+           email = "simon.adamov@meteoswiss.ch")
+Description: This package mainly evolves around the hirstcomparison.Rmd vignette. 
+    As a centerpiece it consolidates all important steps carried out during this analysis.
+    The purpose of the project is to compare three Hirst Pollen Traps that measured Pollen concentrations
+    throughout the blooming season 2013 in Payerne.
 License: What license it uses
 Encoding: UTF-8
 LazyData: true
-Suggests: 
+Imports:
+    tidyverse,
+    lubridate,
+    ggpubr,
+    here,
+    Amelia,
     knitr,
-    rmarkdown
+    rmarkdown,
+    caTools,
+    MASS,
+    lme4,
+    psych,
+    robustlmm,
+    goftest,
+    kableExtra,
+    Amelia,
+    data.table,
+    dunn.test,
+    conover.test,
+    tsibble,
+    feasts,
+    AeRobiology,
+    padr,
+    goftest
 VignetteBuilder: knitr
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.0
