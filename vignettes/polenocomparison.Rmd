@@ -11,6 +11,8 @@ output:
   word_document: default
 ---
 
+This analysis could look as complete as the Hirst one at some point, once the classifier is fully functional. Until then it is suggested to also consider the Hirstcomparison vignette for the latest methods and plots.
+
 # Setup
 
 ```{r}
@@ -18,13 +20,12 @@ output:
 
 # rmarkdown::render("vignettes/polenocomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
-species <- "total" # Total is the only option currently, as poleno classifier is not yet functional c("total", "alnus", "corylus", "taxus", "ulmus", "cupressus" "betula",  "populus", "poaceae", "fraxinus"  "platanus"  "quercus", "fagus", "pinaceae", "carpinus")
+species <- "total" # c("total", "alnus", "corylus", "taxus", "ulmus", "cupressus" "betula",  "populus", "poaceae", "fraxinus"  "platanus"  "quercus", "fagus", "pinaceae", "carpinus")
 resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "hourly")
 traps = c("poleno2", "poleno4", "poleno5", "hirst") # A selection of c("poleno2", "poleno4", "poleno5", "hirst") 
 if (!(resolution %in% c("hourly", "daily"))) traps <- traps[traps != "hirst"]
 
-devtools::install_version("caTools", version = "1.17.1.1")
-renv::paths$library()
+# devtools::install_version("caTools", version = "1.17.1.1")
 
 ```
 
@@ -55,9 +56,7 @@ library(kableExtra)
 library(tsibble)
 library(feasts)
 library(padr)
-library(ggthemr)
-
-# library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
+library(ggthemr) # On windows I load the functions from this package directly as installation from git is not allowed (no source packages allowed). For Linux simply uncomment this line.
 
 # library(Amelia) # only used for one fct call to missmap()
 # library(data.table) # only used for transpose()
@@ -106,17 +105,6 @@ if (species != "total"){
   ))
 }
 
-# save(data_raw_poleno, file = "data_raw_poleno.Rdata")
-# load(file = "data_poleno.Rdata")
-
-
-# data_raw_poleno[[1]] %>% summary
-# summary(data_poleno[[1]])
-# glimpse(data)
-# head(data, 200)
-
-# Device_idDevice, deviceVersion, valid have the same values for all observations
-# The three timestamps are merely seconds apart. For now I simply decided to use one of them. All of them are in agreement with the eventBaseName.
 ```
 
 
@@ -133,17 +121,6 @@ data_hirst_raw <- data.table::fread(paste0(path_data, file_hirst)) %>%
   filter(timestamp > ymd_hms("2020-03-03 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
          timestamp <= ymd_hms("2020-05-08 00:00:00")) %>% 
   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
-
-# file_hirst_3h <- list.files(path_data, pattern = "dwh_3h.csv")
-# 
-# data_hirst_3h_raw <- data.table::fread(paste0(path_data, file_hirst_3h)) %>% 
-#   as_tibble() %>% 
-#   select(- katacuh0, - khrubih0, - kaerich0, - kaarboh0, - kagymnh0, - khcereh0, - khherbh0, - khjunch0, - khindeh0) %>% # As discussed with Bernard Clot, these species should be excluded from the data. Some are old, others would be zero anyways.
-#   mutate(timestamp = dmy_hm(timestamp)) %>% 
-#   filter(timestamp > ymd_hms("2020-02-19 00:00:00"), # That's when the Hirst traps started measuring this season (First Full Day)
-#          timestamp < ymd_hms("2020-05-04 00:00:00")) %>% 
-#   mutate_at(vars(khambrh0:khzeamh0), ~ if_else(. < 0, NA_real_, .)) 
-
 ```
 
 ## Imputation / Missing
@@ -221,19 +198,11 @@ missing_hirst <-
 
 ```
 
-For the hourly values we rescale the measurements to a range from 0 to 100 for hirst and poleno. The daily values and then based on those hourly averages. For the 3, 6 and 12 hour averages we will scale the resulting pollen counts for the poleno device to a scale from 0 to 100 as well.
-
 Right now we don't have the official factor to convert the pollen counts into concentrations for Poleno. Probably by chance, the counts are already very similar to the pollen per m^3 measured by hirst. I first did this exercise with scaling the time series from each trap and for each temporal aggregation to a scale of 0 to 100. After discussion with the MDS team I tried to apply a simple scaling factor to poleno, so that all time series have the same median. Depending on the research question it might be less impactful to scale the median or to the same min-max. In any case, the concentrations are already very close to Hirst-concentrations. It makes therefore little sense to introduce additional uncertainty by applying some sort of scaling to the data. For now we work with unscaled data.
+
 ```{r eval = TRUE}
 
-# data_poleno_scaled <- map(data_poleno_hourly, ~scales::rescale(.x$total, c(0, 100)))
-# data_poleno_hourly <- map2(data_poleno_hourly, data_poleno_scaled, ~ .x %>% mutate(total = .y))
-# data_hirst_scaled <- scales::rescale(data_hirst_prep$total, c(0, 100))
-# data_hirst <- data_hirst_prep %>% 
-#   mutate(total = data_hirst_scaled)
-
 data_hirst <- data_hirst_prep
-
 data_hourly_comb_raw <- data_poleno_hourly %>% 
   bind_rows %>% 
   bind_rows(data_hirst) 
@@ -241,13 +210,11 @@ data_hourly_comb_raw <- data_poleno_hourly %>%
 
 ```{r eval = TRUE}
 # Calibration was carried out on the Poleno traps during specific time slots (see: https://docs.google.com/document/d/1Eyy7G7D_f_FkovU7Ui_f3e8nbrHRF3GXKJXkU-_JPYQ/edit#) (in UTC?)
-# Those times have to be filtered for at least that specific trap. But, as we will compare traps with each other, it's safest to remove those times from all traps. As we are comparing with hourl averages from Hirst we should probably remove the full hours during which calibration was carried out. Our time series expands from the 15.2.2020 until the 3.5.2020
+# Those times have to be filtered for at least that specific trap. But, as we will compare traps with each other, it's safest to remove those times from all traps. As we are comparing with hourly averages from Hirst we should probably remove the full hours during which calibration was carried out. Our time series expands from the 15.2.2020 until the 3.5.2020. Removing the full day was also tested and considered to be too strict.
 
 # Für die Kalibration wird ein «Atomizer» (https://swisens.ch/products/atomizer/) auf den Einlass gesteckt welcher nur die zu kalibrierenden Pollen ins Gerät befördert. Also eine Art Laborbedingung im Feld. Das Gerät misst während der Kalibration nichts was in der realen Welt (und bei den anderen zwei Geräten) rumfliegt.
 
 # Here we exclude missing measurements from all traps to make the hourly and daily averages comparable.
-
-
 
 data_hourly_comb <- data_hourly_comb_raw %>% 
   mutate(total = if_else(between(timestamp, ymd_h("2020-02-18 08"), ymd_h("2020-02-18 16")) |
@@ -287,11 +254,7 @@ data_hourly_comb <- data_hourly_comb_raw %>%
 
 For any calibration event the full hour will be excluded from the measurement. I also did the whole analysis with excluding the full day, as apparently the calibration can distort the measurements for multiple hours. In the end I found that the distortion is not large and only the full hour has to be excluded. It makes sense to exclude the least amount of data, to be able to calculate meaningful statistics and create nice time-series plots. For the 3, 6 and 12 hour averages I will fall back to full-day exclusion, as it would be too cumbersome to define cases with (in-) sufficient measurements in any specific timestep.
 
-
-
 ```{r eval = TRUE}
-
-
 calib_events <- c(
   "2020-02-18",
   "2020-02-20",
@@ -317,8 +280,7 @@ calib_events <- c(
 ) %>%
   ymd()
 
-
-## This excludes the full day where calibration events happened. The calib events can distort the measurements even hours after the actual calibration. If one does this a lot of data is excluded from the analysis, but it is the most robust procedure and the same approach was chosen for 3, 6, 12  hour averages (not to do the exclusion of calib events multiple times for different aggregations)
+## The below excludes the full day where calibration events happened. The calib events can distort the measurements even hours after the actual calibration. If one does this a lot of data is excluded from the analysis, but it is the most robust procedure and the same approach was chosen for 3, 6, 12  hour averages (not to do the exclusion of calib events multiple times for different aggregations)
 # hourly_calib <- tibble(date = rep(calib_events, each = 24), hour = rep(seq(1, 24, 1), times = length(calib_events))) %>%
 #   mutate(timestamp = ymd_hm(paste0(as.character(date), paste0(sprintf("%02d", hour), ":00"))),
 #          total = NA_real_)
@@ -341,17 +303,6 @@ data_daily_comb <- data_hourly_comb %>%
   mutate(hour = "00:00",
          timestamp = date) %>% 
   ungroup()
-
-
-# # There is enough data to justify calculating the mean for each day and removing NAs.
-# data_hourly_comb %>% 
-#   filter(!is.na(total)) %>% 
-#                     group_by(date, trap) %>% 
-#                     summarise(n()) %>% 
-#                     mutate(hour = "23:59",
-#                            timestamp = date) %>% 
-#                     ungroup()
-
 ```
 
 ```{r eval = TRUE}
@@ -463,13 +414,6 @@ data_hours6_pol <- map2(data_hours6_pol, c(2, 4, 5), ~.x %>%
 data_hours12_pol <- map2(data_hours12_pol, c(2, 4, 5), ~.x %>% 
       bind_rows(hours12_calib %>% mutate(trap = paste0("poleno", .y))))
 
-# data_hours3_comb <- map(data_hours3_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
-#   bind_rows() 
-# data_hours6_comb <- map(data_hours6_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
-#   bind_rows() 
-# data_hours12_comb <- map(data_hours12_pol, ~.x %>% mutate(total = scales::rescale(.$total, c(0, 100)))) %>%  
-#   bind_rows()
-
 data_hours3_comb <- data_hours3_pol %>% bind_rows()
 data_hours6_comb <- data_hours6_pol %>% bind_rows()
 data_hours12_comb <- data_hours12_pol  %>% bind_rows()
@@ -498,7 +442,7 @@ data_hourly_comb %>%
 ## Robustness of Traps / Simultaneous Measurements
 
 We want to assess the similarity between traps for different temporal averages. It is known / expected that Hirst traps are not reliable for short time-windows. The statistics calculated below, are affected by too many measurements that are zero for any given time. But at the same time, we will also compare those Hirst traps to newer automatic traps with a high temporal resolution.  
-Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
+Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete observation period from April to July).
 
 
 ```{r results="asis"}
@@ -536,15 +480,18 @@ number_traps_comb <- map2(number_of_measurements_comb, timesteps_comb, ~ bind_ro
          "12Hour-Values" = total...4,
          "Daily-Values" = total...5)
 
-number_traps_comb %>% 
+table_traps <- number_traps_comb %>% 
   bind_rows() %>% 
   kable() %>% 
   kable_styling(full_width = FALSE)
 
+table_traps
+
 # For rendering docx documents
 # NOT ALLOWED AT MCH TO EXECUTE .exe file
-# save_kable(table_traps, file = "table_traps.png")
 # webshot::install_phantomjs()
+# kableExtra::save_kable(table_traps, file = "table_traps.doc")
+
 
 ```
 
@@ -599,7 +546,7 @@ ggthemr("fresh")
 The Poleno-traps allow to investigate different time-averages very easily. For the Hirst traps we only get 1hour, 3hour and daily averages from the DWH. The 3hour avg were excluded from this analysis because the observations don't appear to be iid (they are calcuated every hour) and the hirst traps were already compared ingreat detail in the hirstcomparison vignette. In the following we investigate the three poleno traps.
 
 
-# ++ Tabular Comparison
+# Tabular Comparison
 
 ```{r}
 data_aggs_pol <- list(data_daily_comb %>% filter(trap != "hirst"), 
@@ -660,7 +607,10 @@ ggthemr("fresh")
 
 ```
 
-
+Ein paar Kommentare (auf Deutsch) die im Meeting mit MDS besprochen wurden und helfen die Time Series zu erklären:
+Für poleno hat man sehr hohes sampling, deshalb haben polenos nicht mehr gemessen (der max threshold wurde erreicht an gewissen tagen). Am 16. april wurde threshold erreicht, poleno 5 vielleicht früher wege feinstaub
+Am 6.7.8. april gab es wasser im gerät - problem mit poaceae. Bei gräsern wurden auf poleno2 tropfen gemessen.
+Feinstaub in städten wird mit brennessel verwechselt.
 
 # Statistical Comparison
 
@@ -827,8 +777,7 @@ ggarrange(plotlist = gg_ab) %>%
 
 ```
 
-We observe that Poleno 2 is generally lower than the other traps, and Hirst is significantly higher than the Poleno traps.
-I will have a closer look at the differences between poleno 2 and poleno 5. The data shows that between March 5 and March 16 the largest differences occur. 
+We observe that the largest differences occur at low and very high concentrations. Usually when poleno 2 is involved and hirst repsectively. In the following we are identifying the days on which the largest differences are occuring.
 
 ```{r fig.width = 11}
 
@@ -1070,7 +1019,7 @@ The assumptions of the Kruskal-Wallis test are similar to those for the Wilcoxon
 The test is generally considered to be robust to ties. However, if ties are present they should not be concentrated together in one part of the distribution (they should have either a normal or uniform distribution)
 https://influentialpoints.com/Training/kruskal-wallis_anova-principles-properties-assumptions.htm
 
-The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median. In other words, there should be roughly the same number of values above and below the median. This can be checked by visual inspection using histogram or density estimators
+The Wilcoxon signed-rank test assumes that the data are distributed symmetrically around the median. In other words, there should be roughly the same number of values above and below the median. This can be checked by visual inspection using histogram or density estimators. The kruskal wallis test assumes that the time series originate from the same underlying distribution.
 
 ```{r}
 data_transformed %>% 
@@ -1159,7 +1108,7 @@ summary(fit_rlmer)
 
 # Measurement Spread and Error Distribution
 
-## ++ Histograms of Concentration Groups
+## Histograms of Concentration Groups
 
 ```{r fig.height=7, fig.width=10}
 gg_hist_conc_pol <- list()
@@ -1196,7 +1145,7 @@ ggarrange(plotlist = gg_hist_conc_pol, nrow = 3, ncol = 2) %>%
 ```
 
 
-A second chapter of the paper should further elaborate on the relative errors between the traps.
+A second chapter of the analysis should further elaborate on the relative differences between the traps.
 We are mostly interested to observe the difference of one specific trap compared to the mean of the three traps at any given point in time. We will compare the relative error for different buckets of pollen concentrations, to see how errors behave when low amounts of pollen are measured. Furthermore, we would like to understand the shape of the error function and if possible fit a parametric curve to the relative differences from the mean.
 
 In this first section we compare relative and absolute differences from the mean. Fitting parameters of a T-Distribution (distribution family visually chosen) using MLE (fitdistr / fit.st). The analysis is based on the transformed values, but the findings are usually independent of the log-transformation.
@@ -1359,11 +1308,13 @@ gg_error_conc
 
 ```
 
-# ++ Auto-Correlation
+# Auto-Correlation
 
 In the following we will investigate the auto-correlation of the poleno pollen measurement time series.
 I will create a dataset with 5-Minute averages to have the shortest window available as possible.
 There is a paper that showed that auto-correlation is to be expected when measuring pollen concentrations. This is important, because for many statistical methods to compare traps the assumptions would be violated. In addition to that it is interesting to see for how long a certain measurement can affect future measurements (also with regards to implementing the data into the predictive pollen-models in COSMO). For Hirst the autocorrelations were probably never an issue, as the coarse temporal resolution removed any autocorrelation in the data.
+
+This analysis is quite experimental and if continued should be re-evaluated. For example the imputation of missing data due to calibration events should not be zeros, but rather some sort of moving average.
 
 ```{r fig.width = 10, fig.height = 10, eval = FALSE}
 

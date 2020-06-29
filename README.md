@@ -1,6 +1,6 @@
 ## Setup
 This project uses renv. To install all packages needed in your local R-environment simply run: `renv::restore()`
-If you are working on your MCH-laptop you might want to set the renv cache-path to another location that the home-folder, otherwise you will reach the quota. Feel free to use my cache with downloaded packages, by storing the following lines of code in your .Renviron file.
+If you are working on your MCH-laptop you might want to set the renv cache-path to another location than the home-folder, otherwise you will reach the quota. Feel free to use my cache with downloaded packages, by pasting the following lines of code into your .Renviron file.
 `# Set the renv cache to prod-zue otherwise my home-drive exceeds storage limits RENV_PATHS_CACHE="/prod/zue/climate/others/ads/share/renv/cache"` 
 If you are using renv you might not be able to work with APK-tools for the time being.
 

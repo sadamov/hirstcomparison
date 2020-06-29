@@ -5,10 +5,10 @@ author: "Simon Adamov"
 date: "`r format(Sys.Date(), '%B %d, %Y')`"
 always_allow_html: TRUE
 output:
-  word_document: default
   html_document:
     df_print: paged 
   pdf_document: default
+  word_document: default
 ---
 
 # Setup
@@ -18,8 +18,8 @@ output:
 
 # rmarkdown::render("vignettes/hirstcomparison.Rmd", output_file = "C:/Users/ads/Desktop/daily_total.html")
 
-species <- "Poaceae"
-resolution <- "2hour" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
+species <- "Total"
+resolution <- "daily" # What temporal resolution should be plotted c("daily", "12hour", "6hour", "3hour", "2hour", "hourly")
 
 ```
 
@@ -173,9 +173,8 @@ data_raw <- map(data_raw, ~mutate_at(.x, vars(all_of(species_selection)), ~./1.3
 ## Imputation and Timeframe Selection
 
 There are a few missing measurements.
-Generally, if one species is NA in one specific trap and line at a certain time, then all species are NA.
-Hence we could assume that the traps had a malfunction during that time.
-What is surprising though is the fact that not all lines have the same amount of NAs.
+Generally, if one species is NA in one specific trap and line at a certain time, then all species are NA. This usually occurs when the silicone rubber bands were being exchanged.
+What is surprising though is the fact that not all lines have the same amount of NAs for the same trap.
 This might suggest that some entries were omitted during the manual pollen counting exercise.
 If these values are outside of the blooming season then we don't have an issue. This should be further evaluated once a decision was made on which species will be evaluated in the paper.
 
@@ -205,7 +204,7 @@ data_raw[[1]] %>% as.data.frame() %>% Amelia::missmap(y.labels = "", y.at = 1, c
 
 ```
 
-For now we leave these measurements as NA and will not plot them nor impute values for statistical analyses.
+For now we leave these measurements as NA and will not plot them nor impute values for statistical analyses. Only were few values are ipacted after the averages were calculated.
 
 ```{r}
 # Make sure that all dataframes have the same amount of rows, working with max amount of data available
@@ -215,22 +214,9 @@ data_raw <- map(data_raw, ~.x %>% filter(datetime > as_datetime("2013-04-02 00:0
 ```
 
 We are mostly interested in observations where Pollen are actually being measured and not the ones where no trap detected anything (which is usually true for many days outside the blooming season). This will lead to a large increase in NA values (that will not be plotted or used for statistical comparison). This is of course a deliberate choice, it was not the goal of the study to see how often all traps measured zero pollen. Everything strongly depends on this decision and the data preparation should be adjusted if other statistical questions are being evaluated.
-We might be switching up the data prep after the first meeting to make the data more consistent and the resulting residuals from the model fit easier to work with. So instead of setting value to NA when all traps are zero for any given time, we will set value to zero if at least ONE trap is zero at a given time. This has a potentially large effect on the analysis and should be reevaluated if the code is used for other problems again in the future. TBD!
+We might be switching up the data prep after the first meeting to make the data more consistent and the resulting residuals from the model fit easier to work with. So instead of setting value to NA when all traps are zero for any given time, we will set value to zero if at least ONE trap is zero at a given time. This has a potentially large effect on the analysis and should be reevaluated if the code is used for other problems again in the future. Please note that the data with the suffix _raw still contains all the zeros, wheras the corresponding data frames without that suffix contain NAs for all timestemp where no pollen were measured by any trap. As soon as we are calculating common means of the three traps, the problem becomes a bit more complicated: we limit ourselves usually to timesteps where all three traps measured, because otherwise the error function (t-distribution) will be distorted.
 
 ```{r}
-
-# data <- data_raw %>%
-#   bind_rows %>%
-#   group_by(datetime) %>%
-#   mutate_at(vars(all_of(species_selection)), function(x){
-#       if(sum(x, na.rm = TRUE) > 0)
-#         return(x)
-#       else
-#         return(NA_real_)
-#   }) %>%
-#   ungroup %>%
-#   group_split(trap,line)
-
 measurements_to_exclude <- data_raw %>%
   bind_rows %>%
   group_by(trap, datetime) %>%
@@ -305,7 +291,7 @@ data_raw <- map(data_raw, ~.x %>%
 ```
 
 
-Five concentration classes could also be defined for the analysis: 0-10 pollen grains/m3, 10-20 pollen grains/m3, 20-50 pollen grains/m3, 50-100 pollen grains/m3, 100-300 grains/m3, and >300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error. This will be done on a ad-hoc basis when needed further below. The classes will depend on the average window.
+Five concentration classes could also be defined for the analysis: 0-9 pollen grains/m3, 10-19 pollen grains/m3, 20-49 pollen grains/m3, 50-99 pollen grains/m3, 100-299 grains/m3, and >=300 pollen grains/m3, with the aim of better understanding whether different pollen concentrations have an impact on sampling and measurement error. This will be done on a ad-hoc basis when needed further below. The classes will depend on the average window.
 
 ### Temporal
 
@@ -429,7 +415,6 @@ data_daily_raw <- map(data_daily_raw, ~.x %>%
 
 We want to assess the similarity between traps for different temporal averages. It is known / expected that Hirst traps are not reliable for short time-windows. The statistics calculated below, are affected by too many measurements that are zero for any given time. But at the same time, we will also compare those Hirst traps to newer automatic traps with a high temporal resolution in a second vignette. It is therefore, crucial to understand how robust shorter observation-windows are for the Hirst traps. We basically want to find the shortest time interval that is still robust. 
 
-As described above there are two main options to prepare the data (otherwise we compare measurements that are zero for the largest portion of the data). First, we could only look at 10min-measurements where all traps measured. We will see below that, except for daily averages, this removes a large portion of the data. Esepcially, because this removal is carried out at the 10min-measurement step. Second, we could include 10min measurements only if at least one trap measured. This is probably what we want to do, as we are not interested in comparing zeros but actual measurements. Below we will deep dive into the statistics of comparing measurers. But first, we can simply look at how often one, two or all three traps measured pollen at the same time.
 Note: It does not matter whether we use the prepared or raw data for this, the outcome will be the same (because we include all measurements where at least one trap measured, so only zeros were removed where none measured. Those "none measured" are anyways defined by the complete obersvation period from April to July).
 
 
@@ -501,7 +486,7 @@ number_traps_perc <- map2(number_traps, timesteps_tb, ~ .x / .y) %>%
         mutate(Comment = c("All traps measured", "Two traps measured", "One trap measured")) %>%
         select(Comment, Fraxinus, Poaceae, Betula, Quercus, Pinus, Total))
 
-number_traps_perc %>% 
+kable_number_traps <- number_traps_perc %>% 
   bind_rows() %>% 
   kable() %>% 
   kable_styling("striped") %>% 
@@ -512,7 +497,7 @@ number_traps_perc %>%
   pack_rows("Daily Averages", 13, 15) %>% 
   column_spec(c(1, 6), border_right = TRUE)
 
-  
+kable_number_traps
   
 
 ```
@@ -534,7 +519,7 @@ min_measurement_tb %>%
 
 
 
-So it seems that it actually happens often that only a fraction of the traps is measuring pollen. It can be expected that the discrepancies mostly occur during times with low pollen concentrations. For that reason, we can filter everything below 10 pollen /m^3 and see how the percentages change. But the results don't change dramatically after doing so.
+So it seems that it actually happens often that only a fraction of the traps is measuring pollen. It can be expected that the discrepancies mostly occur during times with low pollen concentrations. For that reason, we can filter everything below 10 pollen /m^3 and see how the percentages change. But the results don't change dramatically after doing so. Further evaluations concerning this minimal threshold are carried out below.
 
 
 ```{r}
@@ -550,7 +535,7 @@ So it seems that it actually happens often that only a fraction of the traps is 
 
 In the following when we look at measurements from traps, we simply average between the four counted lines.
 
-Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Index (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998).
+Several metrics were calculated: the frequency of occurrence for each pollen was obtained by counting the number of days that each particular pollen was detected; the seasonal mean was calculated by averaging values for each pollen for all the days that it occurred; and the Seasonal Pollen Integral (SPI) was calculated by integrating the concentrations of a particular pollen over the entire season (Mandrioli et al., 1998).
 
 These metrics are well-known and usually part of a Pollen Measurement study. It is common to calculate the means before setting values outside the blooming season to NA. Hence I created a data_raw list of tibbles above just for that purpose.
 
@@ -616,8 +601,7 @@ spi_raw <- data_daily_raw %>% # Seasonal Pollen Integral
   filter(name != "trap") %>% 
   mutate_at(vars(starts_with("trap")), round)
 
-
-occurence_raw %>% 
+kable_metrics <- occurence_raw %>% 
   inner_join(maximum_raw, by = "name") %>% 
   inner_join(average_raw, by = "name") %>% 
   inner_join(spi_raw, by = "name") %>% 
@@ -631,9 +615,13 @@ occurence_raw %>%
   column_spec(2:13, width = "2.5cm") %>% 
   column_spec(seq(1, 13, 3), border_right = TRUE)
 
+kable_metrics
+
 ```
 
 ## Variability of the Means
+
+This is a simple analysis of the metrics above, showing how much the means differ between the traps.
 
 ```{r}
 
@@ -713,6 +701,8 @@ sd_tb_hours2 %>%
 
 ## Variability of the Individual Measurements
 
+These tables nicely show how large the spread becomes in the data looking at the coefficient of variance (sd / mean) for two-hourly and daily values. The selection of two-hourly and daily values was carried out after discussing the paper draft. It seems quite common in the literature to use 2hour averages as the shortest interval and daily as the longest. Hence we followed this approach to show the two extremes. One can see how the 2-hour values have a larger cv.
+
 ### Top Species
 
 ```{r}
@@ -754,7 +744,7 @@ sd_daily_ind <- data_daily_raw %>%
   bind_rows %>% 
   ungroup
 
-sd_2hour_ind %>% 
+kable_cv_top <- sd_2hour_ind %>% 
   bind_cols(sd_daily_ind) %>% 
   mutate_if(is.numeric, ~round(., 2)) %>% 
   select(-name...6) %>% 
@@ -764,6 +754,8 @@ sd_2hour_ind %>%
   add_header_above(c(" " = 1, "Two-Hour Averages" = 4, "Daily Averages" = 4)) %>% 
   column_spec(1, border_right = TRUE) %>% 
   column_spec(5, border_right = TRUE)
+
+kable_cv_top
 
 ```
 
@@ -810,7 +802,7 @@ sd_daily_ind <- data_daily_raw %>%
   bind_rows %>% 
   ungroup
 
-sd_2hour_ind %>% 
+kable_cv_size <- sd_2hour_ind %>% 
   bind_cols(sd_daily_ind) %>% 
   mutate_if(is.numeric, ~round(., 2)) %>% 
   select(-name...6) %>% 
@@ -919,7 +911,7 @@ sd_daily_ind <- data_daily_conc %>%
   bind_rows %>% 
   ungroup
 
-sd_2hour_ind %>% 
+kable_cv_conc <- sd_2hour_ind %>% 
   bind_cols(sd_daily_ind) %>% 
   mutate_if(is.numeric, ~round(., 2)) %>% 
   select(-name...6) %>% 
@@ -930,7 +922,7 @@ sd_2hour_ind %>%
   column_spec(1, border_right = TRUE) %>% 
   column_spec(5, border_right = TRUE)
 
-
+kable_cv_conc
 
 ```
 
@@ -1100,7 +1092,7 @@ Typically we see that trap 8 shows higher measurements for a variety of species.
 
 # Visualization
 
-Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window.
+Now let's plot some time series to get a better overview of the data. In the plot below the user can select any species and temporal resolution to compare the measurements from different lines and traps. After that we always average between the lines for each trap, to obtain a representative sample (~10% of pollen-plate evaluated under microscope). As a very general statement, we see again that trap number 8 has higher concentration-measurements than the other two. The shorter the temporal averaging window the large those differences can become. Generally, the analysis tends to be more stable when looking at larger time-windows and Total-Pollen counts. This is not surprising, as these setting allow us to benefit from all the data we have and missing measurements will be excluded during the averaging of concentrations in a time-window. The standard deviation is also largest for trap number 8 for many species.
 
 ```{r }
 ggthemr("fresh")
@@ -1331,7 +1323,10 @@ gg_ab
 
 ```
 
-```{r}
+```{r eval = FALSE}
+
+# This plot is not really useful :-)
+
 data_altman_adj <- data_transformed %>% 
   select(!!sym(species), trap, timestamp) %>% 
   pivot_wider(names_from = trap, values_from = !!sym(species), timestamp) %>% 
@@ -1379,6 +1374,7 @@ gg_ab_adj
 
 #### For Different Minimum Concentration-Thresholds
 
+This is a quick analysis to visually evaluated the impact of minimum thresholds for the measurements and observe the discrete prioperties of the data.
 
 ```{r eval = FALSE}
 
@@ -1596,26 +1592,6 @@ confint(fit_lmer, oldNames = FALSE)
 # confint(fit_anova) # For comparison
 ```
 
-So we can compare the estimated "explained variance" by trap of the total variance for both anova and lmer.
-
-```{r}
-summary_anova <- summary(fit_anova)
-summary_lmer <- summary(fit_lmer)
-
-explained_anova <- summary_anova[[1]][1, 2] / summary_anova[[1]][2, 2]
-p_anova <- summary_anova[[1]][1, 5]
-
-explained_lmer <- summary_lmer$varcor$trap[1, 1] / summary_lmer$sigma^2
-
-tibble("ANOVA" = explained_anova,
-       "LMER" = explained_lmer) %>% 
-  kable() %>%
-  kable_styling(full_width = FALSE)
-
-```
-
-
-
 Checking the residuals again here:
 
 ```{r}
@@ -1747,6 +1723,11 @@ summary(fit_rlmer)
 
 ```
 
+So we can compare the estimated "explained variance" by trap of the total variance for both anova and lmer. For anova this will be calculated further below. For the robust methods there are several options available that are not further discussed here, but can be looked at in these resources:
+https://rcompanion.org/handbook/F_08.html
+https://www.datanovia.com/en/lessons/kruskal-wallis-test-in-r/
+https://www.frontiersin.org/articles/10.3389/fpsyg.2013.00863/full
+
 # Measurement Spread and Error Distribution
 
 A second chapter of the paper should further elaborate on the relative errors between the traps.
@@ -1853,6 +1834,8 @@ ad.test((errors$error_rel[!is.na(errors$error_rel)] - m_rel)/s_rel, "pt", df = d
 
 ## Relative Errors
 
+Looking at absolute errors in log scale (as we did above) is closely related to relative differences on an absolute scale. This is what we are doing from now on out. 
+
 ```{r}
 if (resolution == "daily"){
   data_errors_raw <- data_daily_raw
@@ -1906,6 +1889,8 @@ data_errors <- measurements_after_exclusion %>%
 ```
 
 ### Concentration Groups
+
+For the concentrations we are looking at some density plots and histograms to start with and then we look at the relative differences from the common mean of the three traps.
 
 ```{r }
 data_errors_conc_raw <- data_errors_raw %>% 
@@ -2032,10 +2017,12 @@ gg_error_conc <- ggarrange(plotlist = gg_hist_conc, nrow = 3, ncol = 2) %>%
   annotate_figure(top = paste("Ratios of Individual", tools::toTitleCase(resolution), "Measurements of the Three Traps vs Average Measurements for Six Pollen Concentration Groups"), bottom = text_grob("We are looking at measurement ratios fitted with a density kernel estimator (red).", color = swatch()[1], face = "italic", size = 10))
 ```
 
+These plots are very nice to observe the variance in the data, as they allow to also compare times where only part of the traps measured. 
+
 ```{r fig.height=7, fig.width=10}
 
 data_conc_diff <- data_errors_conc_raw %>% 
-  filter(type == species) %>% # Feel free to filter by species
+  # filter(type == species) %>% # Feel free to filter by species, this might not be the best idead though, as the number of observations becomes quite small.
   pivot_longer(4:9, names_to = "group", values_to = "value") %>% 
   pivot_wider(names_from = trap) %>% 
   mutate(diff24 = abs((trap2-trap4) / ((trap2+trap4)/2)),
@@ -2059,37 +2046,6 @@ gg_boxplot_reldiff <- data_conc_diff %>%
   labs(x = "", y = "abs(trapᵢ - trapⱼ) / mean(trapᵢ, trapⱼ)", title = paste("Relative Pairwise Differences for Daily Average Concentrations of", species, "Pollen")) +
   scale_y_continuous(labels = scales::percent)
 
-# data_conc_plot <- data_conc_diff %>% 
-#   group_by(group) %>% # Select group or type here
-#   summarise(meandiff24 = mean(diff24, na.rm = TRUE),
-#             meandiff28 = mean(diff28, na.rm = TRUE),
-#             meandiff48 = mean(diff48, na.rm = TRUE),
-#             sddiff24 = sd(diff24, na.rm = TRUE),
-#             sddiff28 = sd(diff28, na.rm = TRUE),
-#             sddiff48 = sd(diff48, na.rm = TRUE)) %>% 
-#   mutate(group = factor(group, levels = c("Group00_10", "Group10_20", "Group20_50", "Group50_100", "Group100_300", "Group300"))) %>% 
-#   ungroup %>% 
-#   arrange(group)
-# 
-# data_conc_plot %>% 
-#   pivot_longer(meandiff24:meandiff48, names_to = "traps") %>% 
-#   mutate(traps = rep(c("24", "28", "48"), 6)) %>% 
-#   select(group, traps, mean = value) %>% 
-#   bind_cols(
-#     data_conc_plot %>% 
-#       pivot_longer(sddiff24:sddiff48, names_to = "names", values_to = "sd") %>% 
-#       select(sd)
-#   ) %>%
-#   mutate(lower = if_else(mean - 1.96 * sd >= 0, mean - 1.96 * sd, NA_real_),
-#          upper = mean + 1.96 * sd) %>% 
-#   select(-sd) %>% 
-#   pivot_longer(mean:upper, names_to = "type", values_to = "values") %>% 
-#   mutate(type = factor(type, levels = c("upper", "mean", "lower"), labels = c("+ 1.96 SD", "Mean", "- 1.96 SD"))) %>% 
-#   ggplot(aes(x = group, y = values, col = traps, fill = traps, shape = type)) +
-#   geom_point() +
-#   scale_shape_manual(values = c(24, 3, 25)) +
-#   labs(x = "", y = "Mean Differences", title = "Relative Pairwise Differences from Common Mean")
-  
 ```
 
 ### Species
@@ -2342,6 +2298,8 @@ http://www.jerrydallal.com/LHSP/compare.htm
 
 # Plots for Paper
 
+In the following I create some additional tables for the paper and in the end export all the relevant figures and tables. This section could definitely need a general overhaul, it is quite lengthy right now... There are very little comments added to this section, I would refer the interested reader to the paper that was written based on this analysis.
+
 ## Contrasts
 
 ### Single Species
@@ -2355,22 +2313,6 @@ npar_contr <- list()
 npar_contr_res <- list()
 npar_contr_overall <- list()
 kruskal_contr <- list()
-# 
-# data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
-# names(data_aggs) <- c("data_hours2", "data_hours3", "data_hours6", "data_hours12", "data_daily")
-# 
-# data_anova_contr <- map(data_aggs, ~map(.x, ~.x %>%
-#   mutate(timestamp = ymd_hm(paste0(date, hour)))))
-# 
-# data_contr <- map(data_anova_contr, ~.x %>% 
-#   bind_rows() %>% 
-#   mutate(trap = as.factor(trap)) %>% 
-#   group_by(trap, timestamp) %>% 
-#   summarise_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~mean(., na.rm = TRUE)) %>% 
-#   ungroup)
-# 
-# data_contr_tf <- map(data_contr, ~.x %>% 
-#   mutate_at(vars(all_of(species_selection), Total, Group1, Group2, Group3, Group4, Group5), ~log(. + 1)))
 
 species_contr <- c("Total", "Fraxinus", "Poaceae", "Betula", "Quercus", "Pinus")
 
@@ -2451,7 +2393,7 @@ daily_table <- daily_contr %>%
   mutate(traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
   select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
 
-two_hour_table %>% 
+kable_contr_top <- two_hour_table %>% 
   mutate(`p-Value` = if_else(`p-Value` < 0.05, 
                              cell_spec(`p-Value`, color = "red"),
                              cell_spec(`p-Value`))) %>% 
@@ -2473,7 +2415,7 @@ two_hour_table %>%
   pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
   pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
 
-  
+kable_contr_top  
 ```
 
 ```{r}
@@ -2509,7 +2451,7 @@ daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>%
 
 options(knitr.kable.NA = '')
 
-two_hour_table_anova %>% 
+kable_anova_top <- two_hour_table_anova %>% 
   bind_cols(daily_table_anova %>% setNames(paste0(names(daily_table_anova), 1))) %>% 
   mutate(Species = rep(species_contr, each = 2)) %>% 
   select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
@@ -2527,6 +2469,7 @@ two_hour_table_anova %>%
   pack_rows(start_row = 9, end_row = 10, indent =  FALSE) %>% 
   pack_rows(start_row = 11, end_row = 12, indent =  FALSE)  
 
+kable_anova_top
 
 ```
 
@@ -2555,7 +2498,7 @@ daily_table <- daily_contr %>%
          traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
   select(Estimator, Lower, Upper, "p-Value" = "p.Value")
 
-two_hour_table %>% 
+kable_robust_top <- two_hour_table %>% 
   mutate(`p-Value` = if_else(`p-Value` < 0.05,
                              cell_spec(`p-Value`, color = "red"),
                              cell_spec(`p-Value`))) %>%
@@ -2577,7 +2520,7 @@ two_hour_table %>%
   pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
   pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
 
-  
+kable_robust_top
 ```
 
 ```{r}
@@ -2705,7 +2648,7 @@ daily_table <- daily_contr %>%
   mutate(traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
   select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
 
-two_hour_table %>% 
+kable_contr_size <- two_hour_table %>% 
   mutate(`p-Value` = if_else(`p-Value` < 0.05, 
                              cell_spec(`p-Value`, color = "red"),
                              cell_spec(`p-Value`))) %>% 
@@ -2727,7 +2670,7 @@ two_hour_table %>%
   pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
   pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
 
-  
+kable_contr_size
 ```
 
 
@@ -2765,7 +2708,7 @@ daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>%
 
 options(knitr.kable.NA = '')
 
-two_hour_table_anova %>% 
+kable_anova_size <- two_hour_table_anova %>% 
   bind_cols(daily_table_anova %>% setNames(paste0(names(daily_table_anova), 1))) %>%
   mutate(Species = rep(species_contr, each = 2)) %>% 
   select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
@@ -2783,7 +2726,7 @@ two_hour_table_anova %>%
   pack_rows(start_row = 9, end_row = 10, indent =  FALSE) %>% 
   pack_rows(start_row = 11, end_row = 12, indent =  FALSE)  
 
-
+kable_anova_size
 ```
 
 ### Pollen Size Group - Robust
@@ -2810,7 +2753,7 @@ daily_table <- daily_contr %>%
          traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
   select(Estimator, Lower, Upper, "p-Value" = "p.Value")
 
-two_hour_table %>% 
+kable_robust_size <- two_hour_table %>% 
   mutate(`p-Value` = if_else(`p-Value` < 0.05,
                              cell_spec(`p-Value`, color = "red"),
                              cell_spec(`p-Value`))) %>%
@@ -2832,7 +2775,7 @@ two_hour_table %>%
   pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
   pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
 
-  
+kable_robust_size
 ```
 
 
@@ -2879,7 +2822,7 @@ for (i in species_contr){
   # npar_contr_res[[i]] <- map(npar_contr[[i]], ~.x[["Analysis"]])
 }
 
-# There is an unsolved error in the nparcomp source-code: https://stackoverflow.com/questions/24047659/dataset-limitation-in-r-package-nparcomp
+# There is an unsolved error in the nparcomp source-code, this prevents us from running the robust methods on the longer conc dataset: https://stackoverflow.com/questions/24047659/dataset-limitation-in-r-package-nparcomp
 
 number_obs_contr <- map(data_contr_conc, ~map(.x, ~length(.x[!is.na(.x)]) / 3))
 min_group <- 0
@@ -2947,7 +2890,7 @@ daily_table <- daily_contr %>%
          traps = rep(c("4-2", "8-2", "8-4"), times = 6)) %>% 
   select("Mean-Difference" = diff, "Lower" = lwr, "Upper" = upr, "p-Value" = "p adj")
 
-two_hour_table %>% 
+kable_contr_conc <- two_hour_table %>% 
   bind_cols(daily_table %>% setNames(paste0(names(daily_table), 1))) %>%
   mutate(species = rep(species_contr, each = 3),
          species = cell_spec(species, angle = 270, align =  "center")) %>% 
@@ -2972,7 +2915,7 @@ two_hour_table %>%
   pack_rows(start_row = 13, end_row = 15, indent =  FALSE) %>% 
   pack_rows(start_row = 16, end_row = 18, indent =  FALSE)
 
-  
+kable_contr_conc  
 ```
 
 ```{r}
@@ -3009,7 +2952,7 @@ daily_table_anova <- map(daily_anova %>% unlist(recursive = FALSE), ~.x %>%
 
 options(knitr.kable.NA = '')
 
-two_hour_table_anova %>% 
+kable_anova_conc <- two_hour_table_anova %>% 
   bind_cols(daily_table_anova %>% setNames(paste0(names(daily_table_anova), 1))) %>%
   mutate(Species = rep(species_contr, each = 2)) %>% 
   select(Species, name, Df, `Sum Sq`, `Pr(>F)`, PES, Df1, `Sum Sq1`, `Pr(>F)1`, PES1) %>% 
@@ -3027,16 +2970,31 @@ two_hour_table_anova %>%
   pack_rows(start_row = 9, end_row = 10, indent =  FALSE) %>% 
   pack_rows(start_row = 11, end_row = 12, indent =  FALSE)  
 
-
+kable_anova_conc
 ```
-
-
 
 ## Exports
 
 ```{r eval = FALSE}
 
-# The Sysadmin does not allow to save kabel as png (need phantomjs), hence the tables were saved manually.
+# For rendering .docx tables change the file ending from .png to .docx 
+# NOT ALLOWED AT MCH TO EXECUTE .exe file on windows though
+# webshot::install_phantomjs() # needed for saveing kables and improved results with magick package
+
+kableExtra::save_kable(kable_metrics, file = "table1_metrics_spi_allspecies.doc")
+kableExtra::save_kable(kable_number_traps, file = "table2_number_traps.doc")
+kableExtra::save_kable(kable_cv_top, file = "table3_cv_top_species.doc")
+kableExtra::save_kable(kable_cv_size, file = "table4_cv_size_groups.doc")
+kableExtra::save_kable(kable_cv_conc, file = "table5_cv_conc_groups.doc")
+kableExtra::save_kable(kable_anova_top, file = "table6_anova_top_species.doc")
+kableExtra::save_kable(kable_anova_size, file = "table7_anova_size_groups.doc")
+kableExtra::save_kable(kable_anova_conc, file = "table8_anova_conc_groups.doc")
+kableExtra::save_kable(kable_contr_top, file = "table9_anova_contrast_top_species.doc")
+kableExtra::save_kable(kable_contr_size, file = "table10_anova_contrast_size_groups.doc")
+kableExtra::save_kable(kable_contr_conc, file = "table11_anova_contrast_conc_groups.doc")
+kableExtra::save_kable(kable_robust_top, file = "table12_robust_contrast_top_species.doc")
+kableExtra::save_kable(kable_robust_size, file = "table13_robust_contrast_size_groups.doc")
+
 # The GG-Plots are being saved right here:
 
 #### PER SPECIES AND TEMPORAL AVERAGE
