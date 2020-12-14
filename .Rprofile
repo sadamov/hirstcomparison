@@ -16,8 +16,8 @@ if (interactive() && Sys.getenv("TERM_PROGRAM") == "vscode") {
   if ("httpgd" %in% .packages(all.available = TRUE)) {
     options(vsc.plot = FALSE)
     options(device = function(...) {
-      httpgd::httpgd()
-      .vsc.browser(httpgd::httpgdURL(), viewer = "Beside")
+      httpgd::hgd()
+      .vsc.browser(httpgd::hgd_url(), viewer = "Beside")
     })
   } else {
     options(vsc.plot = "Beside")

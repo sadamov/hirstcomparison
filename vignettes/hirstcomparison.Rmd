@@ -37,6 +37,8 @@ knitr::opts_chunk$set(echo = FALSE,
 # This project is using renv dependency management, for more info: https://cran.r-project.org/web/packages/renv/vignettes/renv.html
 
 library(caTools)
+library(httpgd)
+library(languageserver)
 library(MASS)
 library(tidyverse)
 library(lubridate)
@@ -98,6 +100,10 @@ All pollen types were counted and included in the “total pollen” category. W
 # PAY2, PAY4 and PAY8 are three different pollen traps
 # lines 2, 4, 6, 7 are four different lines, along which the pollen were manually counted under the microsope.
 # Lines 2 and 6 were counted in 2013, whereas lines 4 and 7 were counted in 2019
+
+# THE DATA IS HUGE AND ORIGINALLY STORED HERE: 
+# M:\zue-prod\climate\others\ads\hirstcomparison\ext-data
+# I suggest to copy the data into your local project repo
 
 path_data <- paste0(here::here(), "/ext-data/")
 files_data <- list.files(path_data, pattern = "2013_10min.csv")
@@ -419,7 +425,6 @@ Note: It does not matter whether we use the prepared or raw data for this, the o
 
 
 ```{r eval = TRUE}
-
 data_aggs <- list(data_hours2, data_hours3, data_hours6, data_hours12, data_daily)
 number_of_measurements <- map(data_aggs, ~.x %>% 
   bind_rows %>%   
