@@ -2982,8 +2982,7 @@ kable_anova_conc
 
 ```{r eval = FALSE}
 
-# For rendering .docx tables change the file ending from .png to .docx 
-# NOT ALLOWED AT MCH TO EXECUTE .exe file on windows though
+# For rendering .docx tables change the file ending from .png to .doc
 # webshot::install_phantomjs() # needed for saveing kables and improved results with magick package
 
 kableExtra::save_kable(kable_metrics, file = "table1_metrics_spi_allspecies.doc")
