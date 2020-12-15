@@ -13,19 +13,22 @@ source(file.path(
 ))
 
 if (interactive() && Sys.getenv("TERM_PROGRAM") == "vscode") {
+  options(vsc.browser = "Beside")
+  options(vsc.viewer = "Beside")
+  options(vsc.page_viewer = "Beside")
+  options(vsc.view = "Beside")
   if ("httpgd" %in% .packages(all.available = TRUE)) {
     options(vsc.plot = FALSE)
+    options(html_type = "html")
+    options(vsc.helpPanel = FALSE)
     options(device = function(...) {
+      # On Tsa the fonts are not automatically recognized by hdd
       httpgd::hgd()
       .vsc.browser(httpgd::hgd_url(), viewer = "Beside")
     })
   } else {
     options(vsc.plot = "Beside")
     options(vsc.dev.args = list(width = 800, height = 600))
-    options(vsc.browser = "Beside")
-    options(vsc.viewer = "Beside")
-    options(vsc.page_viewer = "Beside")
-    options(vsc.view = "Beside")
   }
 }
 
