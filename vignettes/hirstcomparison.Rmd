@@ -1252,7 +1252,7 @@ gg3 <- data_corr %>%
 title <- tools::toTitleCase(paste0("Comparison of ", resolution, " average concentrations of ", species, " pollen between the three traps"))
 
 gg_corr <- ggarrange(gg1, gg2, gg3, ncol = 3) %>%
-  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
+  annotate_figure( top = title, bottom = text_grob("Pairwise correlation between traps; grey line shows the Loess smoother; the red line shows a theroratical perfect correlation of 1. \n In the text box one can see the 95% confidence intervals of the R-values (adjusted for multiple comparison) as obtained by Pearson and two robust methods.", color = swatch()[1], face = "italic", size = 10))
 
 gg_corr
 ```
