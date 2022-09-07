@@ -1460,7 +1460,7 @@ The first assumption is most crucial (but also most difficult to check). If the 
 violated, statistical inference can be very inaccurate. In the ANOVA setting, the last assumption is typically
 not as important compared to a regression setting, as we are typically fitting “large” models.
 
-Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmic the measured concentrations.
+Below we prepare the data averaging between the four lines in each trap. As we will see further below in the residuals section, it is necessary to logarithmise the measured concentrations.
 
 ### F-Test / Omnibus-Test
 
