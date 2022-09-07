@@ -1,16 +1,17 @@
-source("renv/activate.R")
-
-Sys.setenv(TERM_PROGRAM = "vscode")
-
-source(file.path(
-  Sys.getenv(if
-  (.Platform$OS.type == "windows") {
-    "USERPROFILE"
-  } else {
-    "HOME"
-  }),
-  ".vscode-R", "init.R"
-))
+if (Sys.getenv("HOME") != "/home/jovyan" &
+  file.exists(paste0(getwd(), "/.vscode"))) {
+  Sys.setenv(TERM_PROGRAM = "vscode")
+  Sys.setenv(DOWNLOAD_STATIC_LIBV8 = 1)
+  source(file.path(
+    Sys.getenv(if
+    (.Platform$OS.type == "windows") {
+      "USERPROFILE"
+    } else {
+      "HOME"
+    }),
+    ".vscode-R", "init.R"
+  ))
+}
 
 if (interactive() && Sys.getenv("TERM_PROGRAM") == "vscode") {
   options(vsc.browser = "Beside")
@@ -22,8 +23,9 @@ if (interactive() && Sys.getenv("TERM_PROGRAM") == "vscode") {
     options(html_type = "html")
     options(vsc.helpPanel = FALSE)
     options(device = function(...) {
-      # On Tsa the fonts are not automatically recognized by hdd
+      # On Tsa the fonts are not automatically recognized by hgd
       httpgd::hgd()
+      httpgd::hgd_svg()
       .vsc.browser(httpgd::hgd_url(), viewer = "Beside")
     })
   } else {
@@ -47,3 +49,12 @@ options(error = function() {
     q(status = 1)
   }
 })
+
+rs <- function(args = NULL) {
+  getOption("rchitect.py_tools")$attach()
+  os <- import("os")
+  sys <- import("sys")
+  os$execv(sys$executable, c("sys$executable", "-m", "radian", args))
+}
+
+source("renv/activate.R")

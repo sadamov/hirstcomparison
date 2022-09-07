@@ -1,11 +1,11 @@
 ## Setup
-This project uses renv. To install all packages needed in your local R-environment simply run: `renv::restore()`
+This project uses renv and R-Version 3.5.2. To install all packages needed in your local R-environment simply run: `renv::restore()`
 If you are working on your MCH-laptop you might want to set the renv cache-path to another location than the home-folder, otherwise you will reach the quota. Feel free to use my cache with downloaded packages, by pasting the following lines of code into your .Renviron file.
 `# Set the renv cache to prod-zue otherwise my home-drive exceeds storage limits RENV_PATHS_CACHE="/prod/zue/climate/others/ads/share/renv/cache"` 
 If you are using renv you might not be able to work with APK-tools for the time being.
 
 ## Branches
-There is a master and develop branch, both were identical when I completed the project end of June 2020. Feel free to pull the latest code from either one.
+There is a master branch only, feel free to pull latest code from it.
 
 ## Vignettes
 Both vignettes are quite similar in terms of what methods are applied. 
